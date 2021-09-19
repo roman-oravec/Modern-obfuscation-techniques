@@ -1,0 +1,523 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% I, the copyright holder of this work, release this work into the
+%% public domain. This applies worldwide. In some countries this may
+%% not be legally possible; if so: I grant anyone the right to use
+%% this work for any purpose, without any conditions, unless such
+%% conditions are required by law.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[
+  digital, %% The `digital` option enables the default options for the
+           %% digital version of a document. Replace with `printed`
+           %% to enable the default options for the printed version
+           %% of a document.
+%%  color,   %% Uncomment these lines (by removing the %% at the
+%%           %% beginning) to use color in the digital version of your
+%%           %% document
+  table,   %% The `table` option causes the coloring of tables.
+           %% Replace with `notable` to restore plain LaTeX tables.
+  twoside, %% The `twoside` option enables double-sided typesetting.
+           %% Use at least 120 g/m² paper to prevent show-through.
+           %% Replace with `oneside` to use one-sided typesetting;
+           %% use only if you don’t have access to a double-sided
+           %% printer, or if one-sided typesetting is a formal
+           %% requirement at your faculty.
+  nolof,     %% The `lof` option prints the List of Figures. Replace
+           %% with `nolof` to hide the List of Figures.
+  nolot,     %% The `lot` option prints the List of Tables. Replace
+           %% with `nolot` to hide the List of Tables.
+  %% More options are listed in the user guide at
+  %% <http://mirrors.ctan.org/macros/latex/contrib/fithesis/guide/mu/fi.pdf>.
+]{fithesis3}
+%% The following section sets up the locales used in the thesis.
+\usepackage[resetfonts]{cmap} %% We need to load the T2A font encoding
+\usepackage[T1,T2A]{fontenc}  %% to use the Cyrillic fonts with Russian texts.
+\usepackage[
+  main=english, %% By using `czech` or `slovak` as the main locale
+                %% instead of `english`, you can typeset the thesis
+                %% in either Czech or Slovak, respectively.
+  english, german, czech, slovak %% The additional keys allow
+]{babel}        %% foreign texts to be typeset as follows:
+%%
+%%   \begin{otherlanguage}{german}  ... \end{otherlanguage}
+%%   \begin{otherlanguage}{russian} ... \end{otherlanguage}
+%%   \begin{otherlanguage}{czech}   ... \end{otherlanguage}
+%%   \begin{otherlanguage}{slovak}  ... \end{otherlanguage}
+%%
+%% For non-Latin scripts, it may be necessary to load additional
+%% fonts:
+\usepackage{paratype}
+\def\textrussian#1{{\usefont{T2A}{PTSerif-TLF}{m}{rm}#1}}
+%%
+%% The following section sets up the metadata of the thesis.
+\thesissetup{
+    date        = \the\year/\the\month/\the\day,
+    university  = mu,
+    faculty     = fi,
+    type        = mgr,
+    author      = Roman Oravec,
+    gender      = m,
+    advisor     = {Mgr. et Mgr. Jan Krhovják, Ph.D.},
+    title       = {Modern obfuscation techniques},
+    TeXtitle    = {Modern obfuscation techniques},
+    keywords    = {keyword1, keyword2, ...},
+    TeXkeywords = {keyword1, keyword2, \ldots},
+    abstract    = {%
+      This is the abstract of my thesis, which can
+
+      span multiple paragraphs.
+    },
+    thanks      = {%
+      These are the acknowledgements for my thesis, which can
+
+      span multiple paragraphs.
+    },
+    bib         = example.bib,
+    %% Uncomment the following line (by removing the %% at the
+    %% beginning) and replace `assignment.pdf` with the filename
+    %% of your scanned thesis assignment.
+%%    assignment         = assignment.pdf,
+}
+\usepackage{makeidx}      %% The `makeidx` package contains
+\makeindex                %% helper commands for index typesetting.
+%% These additional packages are used within the document:
+\usepackage{paralist} %% Compact list environments
+\usepackage{amsmath}  %% Mathematics
+\usepackage{amsthm}
+\usepackage{amsfonts}
+\usepackage{url}      %% Hyperlinks
+\usepackage{markdown} %% Lightweight markup
+\usepackage{tabularx} %% Tables
+\usepackage{tabu}
+\usepackage{booktabs}
+\usepackage{listings} %% Source code highlighting
+\usepackage{llvm/lang}  % include custom language for LLVM IR.
+\usepackage{nasm/style} % include custom style for NASM assembly.
+\lstset{
+  basicstyle      = \ttfamily,
+  identifierstyle = \color{black},
+  keywordstyle    = \color{blue},
+  keywordstyle    = {[2]\color{cyan}},
+  keywordstyle    = {[3]\color{olive}},
+  stringstyle     = \color{teal},
+  commentstyle    = \itshape\color{magenta},
+  breaklines      = true,
+}
+\usepackage{floatrow} %% Putting captions above tables
+\floatsetup[table]{capposition=top}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+
+\begin{document}
+\chapter{Introduction}
+%\addcontentsline{toc}{chapter}{Introduction}
+
+Intro goes here.
+
+\chapter{Obfuscation}
+ 
+This chapter describes some of the obfuscation techniques from a general point of view, as those principles can be applied to obfuscate a program on the source code, intermediate representation, or machine code level. The subsequent chapters will deal with implementation details for applying those methods to a program represented in the LLVM Intermediate Representation. 
+
+
+
+\section{Obfuscating Transformations}
+
+Collberg et. al \cite{taxonomy_obf} formally defines an \textit{obfuscating transformation} as follows:
+
+
+\begin{definition}[Obfuscating transformation]{\ \\} \label{def:transformation}
+Let $P \xrightarrow{\text{T}} P'$ be a transformation of a source program $P$ into a target program $P'$.
+$P \xrightarrow{\text{T}} P'$ is an \textit{obfuscating transformation}, if $P$ and $P'$ have the same \textit{observable behavior}. More precisely, in order for $P \xrightarrow{\text{T}} P'$ to be a legal obfuscating transformation, the following conditions must hold:
+\begin{itemize}
+    \item If $P$ fails to to terminate or terminates with an error
+condition, then $P'$ may or may not terminate.
+    \item Otherwise, $P'$ must terminate and produce the same output as $P$. 
+\end{itemize}
+\end{definition}
+
+This definition states that applying the transformations should preserve the input-output behavior of the program, but allows the obfuscated version of the program to produce some additional behavior, for example performing calls to the operating system or creating new files. 
+
+The transformations may, and usually do, increase the computational complexity and memory requirements of the program. 
+
+\subsection{Opaque predicates} \label{opaque}
+Opaque predicates are common but effective constructs used for obfuscation. Constructing an opaque predicate consists of transforming a simple boolean expression into a complex one. 
+
+\begin{definition}[Opaque predicate]
+\label{def:opaque}
+A predicate $P$ is opaque at point $p$ in a program, if its outcome is known at obfuscation time. We write $P_p^F (P_p^T)$ if $P$ always evaluates to \texttt{False} (\texttt{True}) at $p$, and $P_p^?$ if $P$ may sometimes evaluate to \texttt{True} and sometimes to \texttt{False} \cite{manufacturing_opaque}.
+\end{definition}
+
+Based on the possible values of an opaque predicate, we can distinguish two types:
+
+\textbf{Invariant opaque predicates.} The value of the predicate is fixed, i.e. the obfuscator knows whether it evaluates to \texttt{True} or \texttt{False}, but its outcome is hard to deduce for the reverse engineer performing static analysis. 
+
+\textbf{Two-way opaque predicates.} This type of predicates can evaluate either to \texttt{True} or \texttt{False} for all possible inputs. Collberg et al. \cite{taxonomy_obf} suggested using two-way opaque predicates as a branching point to two functionally identical branches, which can be created by cloning a single branch and applying different obfuscations on both of them. This makes the static analysis of the program harder while preserving the original functionality. 
+
+Apart from types, opaque predicates can be categorized according to the methods of their construction: 
+
+\textbf{Arithmetic-based opaque predicates.} They are constructed using hard-to-solve mathematical formulas and used to hide invariant properties of the predicate. The obfuscator uses a mathematical identity that always evaluates to the same boolean value. In Collberg's taxonomy \cite{taxonomy_obf}, this type of predicate falls into the \textit{trivial} category, because the deobfuscator can deduce its value by performing a static analysis restricted to a single basic block\footnote{Basic block is a sequence of instructions executed one-after-the-other with no branching\cite{dragonBook}} of a control flow graph. 
+
+This kind of predicates is used in the \textit{Obfuscator-LLVM} in the \textit{Bogus Control Flow} pass, which adds a new basic block to the Control Flow Graph, but the branch leading to this new block is never taken. The mathematical identity used to construct the opaque predicate in this obfuscator is:
+
+\begin{equation}
+    \forall x, y \in \mathbb{Z}: (y < 10 || x \times (x + 1) \mod 2 == 0)
+\end{equation}
+
+\textbf{Mixed Boolean-Arithmetic based opaque predicates.} This method is based on a technique described by Zhou et al. \cite{mba_zhou}, called \textit{Mixed Boolean Arithmetic} (MBA). 
+MBA uses linear identities involving Boolean and arithmetic operations. MBA is further discussed in Section \ref{mba}.
+
+\textbf{Alias-based opaque predicates.} This is one of the resilient methods proposed by Collberg et al. \cite{manufacturing_opaque} based on aliasing, i.e. state of a program where a particular memory location is referenced to by multiple pointers. When there is a possibility of aliasing, the static analysis might be much harder. In some cases, static alias analysis might be even undecidable \cite{aliasing_hard}.
+
+Opaque predicates designed by Collberg et al. are constructed using two linked lists and two global pointers pointing into them. The opaque predicate then checks whether two pointers are aliasing, which always results in \texttt{False} since the two global pointers always refer to nodes within different lists. 
+
+\textbf{Environment-based opaque predicates.}
+This method uses system calls or library calls which guarantee that the result of a predicate using such calls will always be either \texttt{True} or \texttt{False}. 
+
+An example of such opaque predicate is calling the \texttt{strcpy}\footnote{https://www.cplusplus.com/reference/cstring/strcpy/} function from the C standard library and comparing the returned value (pointer to the destination array) with the first argument supplied to the function.
+
+\textbf{Bi-opaque predicates.} This method of constructing opaque predicates has been recently introduced by Xu et al. \cite{bi_opaque}. The advantage of bi-opaque predicates is that they are resilient against symbolic execution engines, such as Triton\footnote{https://triton.quarkslab.com/}, angr\footnote{https://angr.io/} and BAP\footnote{https://github.com/BinaryAnalysisPlatform/bap}. The tool\footnote{https://github.com/zzrcxb/fusor} developed by Xu et al. is built on \textit{Obfuscator-LLVM}, but replaces the trivial arithmetic-based opaque predicates with more resilient \textit{symbolic opaque predicates}, which exploit various weaknesses of symbolic execution. The \textit{bi-opaque} property means that these predicates can introduce \textit{false positives} to the analysis, which may make the reverse engineer falsely recognize legitimate predicates as opaque predicates.
+
+Opaque predicates can be used to enhance other obfuscation methods, for example, the dead code insertion, described in \ref{dead}. 
+
+\subsection{Instructions Substitution} \label{substitution}
+Instructions substitution is one of the most simple obfuscation techniques. The principle of this method is to replace instructions containing binary arithmetic operations, such as addition and subtraction, and binary boolean operations, such as logical AND or XOR, with more complicated sequences of code, which yield the same result. 
+
+Despite its simplicity, this technique is still used in current obfuscation tools. For example, \textit{Obfuscator-LLVM} and \textit{Tigress} implement obfuscations that transform standard binary operators with more complex expressions in MBA (\ref{mba}) form.
+
+The following formula and other examples of substituting simple arithmetic and boolean expressions with more complex ones can be found in \cite{hackers_delight}. Zhou et al. \cite{mba_zhou} show that there is an unlimited number of such identities. 
+
+\begin{equation}
+\begin{split}
+    x - y & = x + \neg y + 1 \\
+    & = (x \oplus y) - 2(\neg x \& y)\\
+    & = (x \& \neg y) - (\neg x \& y) \\
+    & = 2(x \& \neg y) - (x\oplus y)
+    \end{split}
+\end{equation}
+
+This technique increases code diversification and it can be further improved by randomly choosing from several identities which can be used to substitute an instruction. 
+
+It is also important to note that the compiler can optimize out this kind of transformation, therefore it should not be used for source-level obfuscation. It also implies that it should be run after the optimization passes if we are obfuscating at the intermediate representation level. 
+
+A reverse engineer could use an optimizer on the obfuscated binary file to get rid of this transformation and reduce the complexity of the code for easier analysis. However, increased diversification of the code can still be useful, for example, to bypass an antivirus engine that is performing a static analysis of the program based on its signature, e.g. looking for known malicious patterns and sequences of instructions.
+
+A rather bizarre example of this obfuscation technique is \textit{The M/o/Vfuscator}\footnote{https://github.com/xoreaxeaxeax/movfuscator}, created by Chris Domas. This is a tool inspired by the idea that the assembly instruction \texttt{mov} is \textit{Turing-complete}. It is able to compile a program written in C language into assembly code composed exclusively of \texttt{mov} instructions. The resulting Control-flow graph looks like a straight line and it would be probably very hard and time-consuming to reverse engineer. However, this obfuscator is more of a proof of concept than a practical tool, due to its impact on the performance of the compiled program. 
+
+There is an even more extreme obfuscator worth mentioning, called \texttt{trapcc}\footnote{https://github.com/jbangert/trapcc}. It produces programs that are able to run without executing a single instruction of the CPU, leveraging Intel's Memory Management Unit fault handling mechanism. However, this is probably not considered an instructions substitution obfuscation in its true sense. 
+
+\subsection{Garbage Code Insertion} \label{garbage}
+This technique consists of inserting arbitrary instructions into the program without making an impact on the execution of the program. The total number of different programs possible
+through garbage insertion is limited from above by the total number of free bits available for program space, which is limited only by available memory for program storage and is clearly enormous \cite{os_protection}. 
+
+Similarly to instructions substitution, described in \ref{substitution}, the inserted code can be optimized out, therefore it should be applied after optimizing the program and it might get easily removed by a reverse engineer who is analyzing the program. 
+
+This technique could be used to bypass simple automated malware analysis engines, as it breaks the signature of the program. The garbage instructions get executed, which adds complexity while performing dynamic analysis of the program, but on the other hand, it might impact the performance. 
+
+A simple example of this technique is inserting \texttt{NOP} instruction into the assembly code. It does not have an impact on the program execution, but it's still reachable by the control flow of the program. A more advanced way to apply this method, described in \cite{os_protection}, is to insert spurious calls to the operating system, which could lead the attacker to analyze a large amount of garbage code and increase the time needed to perform the analysis. 
+
+Yadegari et al. \cite{generic_deobfuscation} proposed a generic automated approach for deobfuscation of executable code based on taint analysis, which tracks the flow of values from the program's inputs to its outputs. This method can identify instructions that do not affect the execution of the program and remove the garbage instructions from the code. 
+
+\subsection{Dead code insertion} \label{dead}
+Dead code insertion is a technique similar to garbage code insertion, described in \ref{garbage}. The main difference is that the dead code adds a branch to the control flow of the program, but this branch is never taken during the execution of the program. 
+
+This method was first introduced by Collberg et al. \cite{taxonomy_obf}. The paper suggests that there is a strong correlation between the perceived complexity of a piece of code and the number of predicates it contains. This technique could be further enhanced by using opaque predicates (\ref{opaque}) -- for example, adding a condition with an opaque predicate, which creates a branching point between a valid and a dead branch. The predicate would always evaluate to \texttt{True}, making it impossible for the control flow of the program to reach the redundant branch. 
+
+Another way to further confuse the reverse engineer, described in \cite{taxonomy_obf}, is to add dummy blocks of code to the redundant branches. For example, one can clone a sequence of instructions from a valid block of code, introduce a bug into it and place it into the redundant (dead) branch. 
+
+This transformation can be removed by utilizing optimization features including in modern compilers, as well as performing the automated deobfuscation approach proposed by Yadegari. et al. \cite{generic_deobfuscation}. An attack proposed by Salem and Bansescu \cite{ml_deobfuscation}, which is based on machine learning and pattern recognition algorithms to identify obfuscating transformations in the program, might also prove useful to a reverse engineer trying to remove this type of obfuscation. 
+
+\subsection{Mixed Boolean-Arithmetic} \label{mba}
+A mixed Boolean-arithmetic expression (MBA) is composed of integer arithmetic operations on n-bit words ($+,-,\times, \div$) and bitwise operations ($\wedge, \vee, \oplus, \neg$). Zhou et al. \cite{mba_zhou} present a method to generate an unlimited supply of MBA transforms based on MBA expressions, MBA identities and invertible functions, which can be used to obscure secret constants, intermediate values, and algorithms, while preserving original functionality. %TODO
+
+The resulting MBA expressions are dependent on program input, so they can not be simplified by compiler optimization. 
+
+There is a practical example in \cite{mba_zhou} of encoding a constant value $K=0x87654321$ as a multiterm polynomial MBA function $f(x_1,...,x_m) = K$ for arbitrary $x_1,...,x_m$.
+
+The example uses a polynomial
+
+$$ f(x) = 727318528x^2 + 3506639707x + 6132886 \pmod{2^{32}}$$
+
+with $K$ as an input, which results in the value 1704256593. Since $f$ is an invertible function, $f^{-1}$ returns the original value of $K$. To make $f^{-1}$ dependent on the input of the program, the following linear MBA identity is combined with $f^1$:
+
+$$2y = -2(x \vee(-y-1))-((-2x-1)\vee(-2y-1))-3$$
+
+Note that the result of the right-hand side does not depend on the value of $x$, which can be an arbitrary integer from the program.  
+
+To further obfuscate the MBA expression, another identity is applied:
+
+$$x + y = (x\oplus y) - ((-2x-1)\vee(-2y-1))-1$$
+
+The resulting encoding can be found in the appendix of \cite{mba_zhou}.
+
+Guinet et al. presented a tool called \texttt{arybo} \cite{guinet_arybo}, which analyzes the operations performed by MBA expressions at the bit-level. The tool is able to significantly simplify MBA expressions, thus presenting a possibility to circumvent this type of obfuscation. 
+
+\subsection{Control Flow Flattening} \label{flatten}
+
+This transformation was first described by Wang et al. in \cite{wang2001protection}. The goal of this technique is to obscure targets of the branches between the basic blocks and thus to make the static analysis of a program more difficult. 
+
+First, the basic blocks of the function are put on the same nesting level, preceded by a new block, usually referred to as the \textit{dispatcher}. The dispatcher contains code that works as a \texttt{switch} statement, used to determine which basic block is going to be executed next. In addition to the dispatcher, a routing variable also needs to be created. Each time one of the original basic blocks terminates its execution, the routing variable is updated and the flow of control is transferred back to the dispatcher, which forwards the control flow to the next basic block, in accordance with the value stored in the routing variable. 
+
+The main issue with control flow flattening is finding a way to make the information about the dispatcher, the routing variable, and its updating, difficult to analyze. In its naive implementation, where the routing values are hardcoded during the obfuscation (as seen in Figure \ref{fig:flattening}), it's easy to analyze the code of the basic blocks and reconstruct the original control flow graph. 
+
+In \cite{wang2001protection}, Wang et. al suggest use of global pointers, as in some cases, analysis of pointers can be proven to be NP-hard \cite{np_pointers}. In contrast, the authors of \cite{cappaert2010general} propose using one-way functions, which are always hard to analyze. 
+
+Another issue with this obfuscation method is the computational overhead it introduces due to additional operations performed by the dispatcher. Johansson et. al \cite{johansson2017lightweight} proposed a novel method using lightweight dispatchers, which present a similar level of complexity for the reverse engineer as analyzing a flattened program augmented with cryptographic hash functions while reducing the overhead by one or more orders of magnitude.
+
+\begin{figure}
+    \begin{center}
+        \begin{minipage}{.39\textwidth}
+             \includegraphics[width=\textwidth]{notflat.png}
+        \end{minipage}
+        \begin{minipage}{.6\textwidth}
+             \includegraphics[width=\textwidth]{flat.png}
+        \end{minipage}
+    \end{center}
+    \caption{Flowchart of a simple program returning a maximum of two numbers, before and after flattening. Notice that the comparison and print statements are on the same level of nesting after being flattened.}
+    \label{fig:flattening}
+\end{figure}
+
+%TODO add more, maybe virtualization
+
+
+\chapter{LLVM}
+
+The LLVM Project started as a research project at the University of Illinois focused on creating a compiler framework designed to support transparent, life-long program analysis and transformation for arbitrary programs, by providing high-level information to compiler transformations at compile-time, link-time, run-time, and idle time between runs \cite{llvm_orig}. 
+
+The name LLVM was originally an abbreviation for \textit{Low Level Virtual Machine}. Since the project has little in common with what is currently perceived as a virtual machine, the meaning of the abbreviation has been later removed to avoid confusion, so now LLVM is the full name of the project\footnote{\url{https://llvm.org/}}.
+
+The project consists of various sub-projects, such as LLVM Core libraries providing source and target-independent optimizer and code generator, implementation of the C++ standard library with full support for C++11 and C++14, Clang -- a compiler for C, C++, and Objective-C, and the LLDB debugger.
+
+\section{LLVM Compiler Architecture}
+The LLVM compiler pipeline consists of three main phases. First, the frontend parses the input code, which includes validation of syntax and semantics and diagnosing errors. If the code is valid, the frontend creates a representation of the code in the LLVM Intermediate Representation (IR), which is discussed in further detail in the following section. 
+
+Various analysis and transformation passes can be run on the IR. Analysis passes are used to gather some higher-order information about the IR without mutating it, e.g. generate the Control Flow Graph. Transformation passes mutate the IR in some way, for example deleting dead code. Transformation passes can use the results generated by the analysis passes. 
+
+The part of a compiler that is responsible for these tasks is typically called the \textit{optimizer}. The main goal of the optimizer is to gather information about the runtime behavior of the program and apply it to improve the final code generated by the compiler. The most common goal of the optimizer is to make the program run faster. However, depending on the application, there can be other goals of optimization which would have higher priority. In the case of embedded systems, it could be reducing the size of the compiled code or analyzing the energy consumption of the program in order to make it more energy-efficient\cite{energy_consuption}. 
+
+Lastly, the backend takes the IR as an input, performs passes like instruction selection and register allocation, and produces native machine code for the target architecture. This compiler pipeline is usually referred to as a \textit{three-phase compiler}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{3phase.png}
+    \caption{A high-level illustration of a three-phase compiler \cite{eng_comp}}
+    \label{fig:3phase}
+\end{figure}
+    
+The design of the LLVM compiler provides much flexibility, given that the IR is source and target-independent, therefore the optimization passes can be applied while compiling source code of any programming language which has an LLVM frontend. Some of the supported languages are C and C++, Go, Haskell, Rust, and Swift. 
+
+LLVM backends, which generate the machine code from the intermediate representation, also support various target architectures, such as x86, ARM, and PowerPC.
+
+For the purpose of obfuscation, the focus of this thesis is the middle section of the pipeline. Even though the optimizer works only with the intermediate representation form, which is passed to the backend afterward, transformations applied in this phase have an impact on the structure of the final executable file. 
+
+\section{LLVM Intermediate Representation}
+The LLVM IR is a low-level language similar to assembly. However, it provides various abstractions which remove target-specific instructions and features. It uses a set of infinite temporary registers and the \textit{Single Static Assignment} (SSA) form, which means that it needs to fulfill two constraints:
+
+\begin{enumerate}
+    \item Each definition has a distinct name,
+    \item Each use refers to a single definition.
+\end{enumerate}
+
+ The  single-assignment  property  of  the  name  space  allows  the  com-piler to sidestep many issues related to the lifetimes of values; for example,because names are never redefined or killed, the value of a name is avail-able along any path that proceeds from that operation. These two properties simplify and improve many optimization techniques\cite{eng_comp}.
+
+The Intermediate Representation is organized into modules -- each module corresponding to a single source file (also referred to as translation unit). During the compilation process, separate modules are linked with the LLVM Linker, also called LLD, to produce the executable file. Modules generally contain functions and global variables, both of which are called \textit{global values}. Global values are represented by a pointer to a memory location and their identifiers begin with the '@' character. In addition to global value identifiers, there are also local identifiers, prefixed with the '\%' character. They are typically used for register names and types. 
+
+\begin{figure}
+    \lstinputlisting[language=llvm,style=nasm]{example.ll}
+    \caption{Example of a short LLVM IR module. Some parts, such as target architecture information, metadata, and comments, have been omitted for better readability. Also, the compiler optimizations have been disabled.}
+    \label{fig:ir_example}
+\end{figure}
+
+Figure \ref{fig:ir_example} shows a simple program in LLVM IR, which can be used to further introduce the LLVM IR syntax. On the first line, there is a definition of a global variable, a constant string, named \texttt{.str}. It consists of 12 characters, size of each of them is 8 bits. The \texttt{private} keyword states that this value is only directly accessible by objects in the current module and \texttt{unnamed\_addr} indicates that the address is not significant, only the content. Constants marked like this can be merged with other constants if they have the same initializer. 
+
+
+The module defines two functions -- \texttt{foo} and \texttt{main} -- starting on lines 3 and 20 respectively. Every function definition starts with the \texttt{define} keyword and specifies the function's return type (a 32-bit integer in this case). The is also and external declaration of \texttt{puts} function, which is called in the \texttt{main} function to print the "Hello world" string. The main function then performs a call the \texttt{foo} function and terminates by returning zero. The \texttt{foo} function consists of multiple basic blocks. Every basic block is prefixed with its name and a colon and ends with a terminator instruction, such as \texttt{br} (branch) and \texttt{ret} (return). The function simply adds two integers (7 and 42), compares the result with another integer, and transfers the control flow to the next basic block, based on the result of the comparison. 
+
+The SSA form, described at the beginning of this section, introduces a special type of instructions, called \texttt{phi} instructions. They appear at the point where different paths of control flow merge, as we can see at line 16 in Figure \ref{fig:ir_example}. The \texttt{phi} instruction assigns a value to the virtual register named \texttt{\%retval.0}, depending on the block from which the control entered the current block. If the control entered from the \texttt{\%if.then} block, value 7 is assigned. Otherwise, the control entered from the \texttt{\%if.end} block and the value stored in the virtual register \texttt{\%add} is chosen. 
+
+The example code in Figure \ref{fig:ir_example} has been generated and tweaked to present a simple and readable form of the LLVM IR. First, \texttt{clang} was used to produce a human-readable form of the IR:
+
+\begin{lstlisting}[language=bash]
+$ clang -S -emit-llvm -c example.c -O0 -Xclang  
+-disable-O0-optnone -fno-discard-value-names 
+-o example.ll
+\end{lstlisting}
+
+The \texttt{-O0} flag tells \texttt{clang} to not perform any optimizations on the file. However, to be able to additionaly apply passes using \texttt{opt}, we need to include the \texttt{-Xclang -disable-O0-optnone} flags. Thanks to the \texttt{-fno-discard-value-names} flag, the IR contains meaningful names of the registers and basic blocks, instead of numbers only (e.g. \texttt{\%1, \%2}).
+
+Then the \texttt{opt} tool is used to apply the \texttt{mem2reg} pass on the IR to transform it into a more simple form by promoting memory references into register references\footnote{\url{https://llvm.org/docs/Passes.html##mem2reg-promote-memory-to-register}}:
+
+\begin{lstlisting}[language=bash]
+$ opt -mem2reg -S example.ll -o example.ll
+\end{lstlisting}
+
+\chapter{Existing tools}
+
+\section{Obfuscator-LLVM}
+
+Obfuscator-LLVM is an open-source project initiated in 2010. It aims to provide increased software security through code obfuscation and tamper-proofing\footnote{Preventing a user from modifying the software against the manufacturer's wishes.}. The project is a fork of the LLVM compilation suite, therefore it works with the LLVM IR, utilizing LLVM's possibility of writing custom transformation passes. It supports all programming languages and target platforms which are currently supported by LLVM. 
+
+The open-source version of the project implements three obfuscating transformations:
+\begin{enumerate}
+    \item \textit{Instructions Substitution} is the most simple obfuscating transformation included in the project. It replaces simple binary operations with more complex ones, as described in Section \ref{substitution}. Obfuscator-LLVM supports substitution of integer additions and subtractions and the Boolean operators  AND  ($\&$),  OR  ($|$)  and  XOR  (ˆ). For example, the expression $a = b \wedge c$ is substituted as $a = (b \oplus \neg c) \wedge b$. Some of the operations have multiple substitution candidates, which are chosen randomly to increase code diversity. A full list of the implemented substitutions can be found in \cite{obfuscator-llvm}. The substitutions are rather simple and according to the authors, this transformation  can easily  be  circumvented  by  re-optimizing  the  generated  code.
+    \item \textit{Bogus Control Flow} modifies the control flow graph by inserting a new basic block before an existing one. The new basic block ends with an opaque predicate (\ref{opaque}), which always evaluates to \texttt{True}, making a conditional jump to the original basic block. The original basic block is also cloned, randomly filled up with various junk instructions, and inserted to the \texttt{False} branch leading from the new basic block. This cloned block is never reached, because of the invariant opaque predicate. The weakness in the implementation of this transformation is that it uses just a single opaque predicate: $$(y < 10\, ||\, x \cdot (x + 1) \mod 2 == 0)$$ The two global variables, $x$ and $y$, which are declared to construct this predicate, can also give a hint on where the opaque predicates are, which would make it easier for a reverse engineer to overcome this transformation. 
+    \item \textit{Control Flow Flattening} is implemented in a naive way, as described in Section \ref{flatten} -- by hardcoding the routing values during the obfuscation process. This implementation provides some resilience against automated analysis tools, e.g. signature-based malware scanners, but it does not propose a significant challenge for a reverse engineer or automated tools performing a more complex static analysis.
+\end{enumerate}
+
+Apart from the aforementioned obfuscating transformations, Obfuscator-LLVM also implements a transformation pass for basic block splitting. This pass introduces additional complexity to the transformations manipulating the control flow. 
+
+The authors also added a feature to tag specific functions, which are supposed to be obfuscated, in the source code of the program. This way, the developers can reduce the negative performance impacts on the program they are obfuscating, by ommiting non-crucial functions from the obfuscation process. 
+
+Commercial version of Obfuscator-LLVM used to implement additional, more advanced capabilities, such as code tamper-proofing and procedures merging, mentioned in \cite{obfuscator-llvm}. However, according to the wiki on the project github repository\footnote{\url{https://github.com/obfuscator-llvm/obfuscator/wiki}}, the commercial version is no longer available since the end of 2016. 
+
+The github repository, containing the open-source version, is not being maintained since then as well. The authors of the project apparently founded a startup named Strong.Codes, which has been later acquired by Snap Inc.\footnote{\url{https://www.venturekick.ch/strongcodes}}.
+
+\section{Tigress}
+
+Tigress is a source-to-source obfuscator for C language, developed by Collberg\footnote{The co-author of \cite{taxonomy_obf}, \cite{manufacturing_opaque} and others} as a research project at the University of Arizona. Compared to Obfuscator-LLVM, while supporting only C language, Tigress seems to be a much more powerful obfuscation tool with a wide variety of implemented transformations, such as:
+\begin{enumerate}
+    \item \textit{Virtualization} turns a function into an interpreter with a custom set of virtual instructions for each function\footnote{\url{https://tigress.wtf/virtualize.html}}.
+    \item \textit{Jitting (just-in-time compilation)} Turns the function to be obfuscated into a new one, which generates the machine code of the original function dynamically when it is executed. Another similar transformation supported by Tigress is \textit{JitDynamic}, which continuously modifies and updates the generated code at runtime. This version works at the granularity of basic blocks, decoding them when they need to be executed and subsequently re-encoding them.
+    \item \textit{Flattening} implements a sligltly more advanced approach to flatten the control flow graph than the transformation implemented in Obfuscator-LLVM. Four kinds of block dispatchers are available -- basic implementation using \texttt{switch} statement, direct \texttt{goto} statements and indirect ones using a jump table, and \textit{call dispatch}, which creates a new function out of every basic block and uses a table of function pointers to jump to them. Obfuscation of the routing variable, which points to the next basic block to be executed, can be also enhanced by using opaque predicates (\ref{opaque}).
+    
+    %TODO
+\end{enumerate}
+
+\section{UPX (Ultimate Packer for eXecutables)}
+
+\chapter{Design}
+
+The core principle of building a new obfuscator is to use the foundations from Obfuscator-LLVM, while improving its currently available transformations and writing some new ones from scratch. Thanks to the modularity of the LLVM pass framework, each of the transformation passes can be applied independently, in a sequence, or together with the original Obfuscator-LLVM passes. 
+
+One way of integrating new passes using the LLVM framework is to include them in the LLVM source tree and build LLVM from source to use them during the compilation and obfuscation. The other way is to build an out-of-tree pass, which means to compile the source code of the pass separately, in an arbitrary destination, and load it with the LLVM \texttt{opt} tool to apply it on an LLVM IR module. We chose the out-of-tree method, as it is more convenient and straigtforward to use. 
+
+To make the transformations more diverse, the passees use the random number generator included in the LLVM's library, which is based on the 64-bit Mersenne Twister by Matsumoto and Nishimura and uses the module ID as a salt. This way, the user can easily supply a seed for the RNG during obfuscation, if he wants make the results of the transformations deterministic. This might prove useful while testing the obfuscated programs. 
+
+Selected transformations are implemented with regard to their resilience against reverse engineering and impact on perfromance.
+
+\section{Instructions substitution}
+While applying basic rewrite rules for binary operations, such as the ones implemented in Obfuscator-LLVM, one can easily deobfuscate the expressions with an optimizing pass included in LLVM's \texttt{clang}, for example the \texttt{InstCombine}\footnote{\url{http://llvm.org/docs/Passes.html##instcombine-combine-redundant-instructions}} pass, which is supposed to "Combine instructions to form fewer, simple instructions." However, when the rewrite rules include MBA (\ref{mba}) expressions applied multiple times, the optimization fails to reconstruct the original expressions, as the experimental results in \cite{eyrollesMBAobf} imply. 
+
+Based on the method for generating MBA identities proposed by Zhou et al. \cite{mba_zhou}, Eyrolles has generated a list of all rewrite rules composed of three boolean expressions \cite{eyrollesMBAobf}. We have decided to implement those rules in the obfuscator, while also providing the user with an option to apply the rules in multiple iterations with randomized selection of a rewrite rule to increase code complexity and diversity. All of the implemented rewrite rules can be found in Appendix \ref{app:a}.
+
+\section{Opaque constants} \label{obf_const}
+
+To prevent the reverse engineer from extracting constant numerical values from the program, we have decided to implement a method proposed by Zhou and Main \cite{mba_zhou} to obscure the data by combining MBA identities (\ref{mba}) with invertible polynomials. 
+
+Let:
+
+\begin{itemize}
+    \item $f$ be an invertible polynomial over $\mathbb{Z}/(2^n\mathbb{Z})$
+    \item $g = f^{-1}$
+    \item $E$ an MBA expression non-trivially equal to zero, for example\footnote{Obtained from the 2nd rewrite rule in Appendix \ref{app:a}.} $E = x + y - (x \vee y)-(\neg x \vee y)+(\neg x)$
+    \item $C$ a constant to be obfuscated.
+\end{itemize}
+
+To obfuscate $C$, we can encode it as $C = g(E + f(C))$. For examaple, suppose we have the following in $\mathbb{Z}/(2^n)$ with 32-bit words\footnote{All calculations are $\mod 2^{32}$}, $f$ is a linear function with coefficient $a$ being an odd integer and $b$ any integer of $\mathbb{Z}/(2^n\mathbb{Z})$:
+
+\begin{align*}
+C & = 123456 \\
+a &= 1337 \\
+b &= 42 \\
+x &= 1307300694 \\
+y &= 2583472541 \\
+f(x) &= ax + b = 1337x + 42\\
+g(x) &= a^{-1}x + (-a^{-1}b) = 1337^{-1}x + (-1337^{-1}\cdot 42) \\&= 1185372425x + 1753965702 \\
+E &= x + y - (x \vee y)-(\neg x \vee y)+(\neg x)
+\end{align*}
+
+Then we can encode $C$ as:
+
+\begin{align*}
+    f(C) &= 1336\cdot 123456 + 42 = 165060714 \\
+    E &= 1307300694 + 2583472541 - 3724540895 - 3153898941 + 2987666601 \\
+    C &= g(x + y - (x \vee y)-(\neg x \vee y)+(\neg x) + f(C)) \\
+    &= 1185372425\cdot165060714 + 1753965702 = 123456
+\end{align*}
+
+The intermediate results of the functions $f$, $g$ and the MBA expression $E$ are calculated during runtime, which makes it much harder to obtain the value of $C$ during static analysis. The values of $a,b,x,y$ can be either randomly generated druing compilation (obfuscation) time,  or by injecting a call to a random number generator which executes during runtime. The third option is to use suitable program inputs or function arguments, which would hinder deobfuscation techniques based on taint analysis\footnote{Tracking flow of values in the program and identifying values and variables that influence program's outputs, as well as the control flow of the program.}. 
+
+We have chosen to use a combination of these two methods for obtaining values of $a,b,x,y$ -- using suitable input values of the program when available, and using a random number generator when none of the input values can be used.
+
+\section{String obfuscation}
+
+Strings, i.e. sequences of characters, are present in most of the existing programs. They are used to improve accesibility for the user interacting with the program, or to produce meaningful logging and error messages for the developers and so on. For the reverse engineer, strings can present a valuable source of information about the program. %TODO elaborate, mention strings command
+
+LLVM provides a convenient way to obfuscate all strings used in the program. During the obfuscation, the strings can be encoded using an arbitrary function which transforms them. Then, a decoding function is injected into the LLVM IR module. During runtime, the decoding function is used to obtain the original string, when needed. All the other strings remain encoded when not being used. This approach provides resilience against static analysis, while also introducing more complexity when performing dynamic analysis. 
+
+The encoding and decoding functions can be different for each obfuscated program, which gives us a choice to either reduce the computational overhead by using an efficient and simple encoding and decoding function, or to strengthen the obfuscation by using more complex cryptographic functions. When a keyed function is used, the key needs to be included in the obfuscated program. Other obfuscation methods, such as the one mentioned in Section \ref{obf_const}, can be used to hide the key.
+
+\subsection{Encoding and decoding functions}
+
+\section{Bogus Control Flow}
+
+\section{Control Flow Flattening}
+
+
+\chapter{Implementation}
+
+\chapter{Evaluation}
+
+\printbibliography[heading=bibintoc] %% Print the bibliography.
+
+\appendix %% Start the appendices.
+\chapter{MBA Rewrite Rules} \label{app:a}
+%TODO add subtraction
+\section{Addition}
+$$
+\begin{aligned}
+&x+y \rightarrow(x \vee y)+y-(\neg x \wedge y) \\
+&x+y \rightarrow(x \vee y)+(\neg x \vee y)-(\neg x) \\
+&x+y \rightarrow-1+y-(\neg x) \\
+&x+y \rightarrow 2 \times(x \vee y)-(\neg x \wedge y)-(x \wedge \neg y) \\
+&x+y \rightarrow 2 \times(-1)-(\neg x)-(\neg y) \\
+&x+y \rightarrow(x \oplus y)+2 y-2 \times(\neg x \wedge y) \\
+&x+y \rightarrow(x \oplus y)+2 \times(\neg x \vee y)-2 \times(\neg x) \\
+&x+y \rightarrow-(x \oplus y)+2 y+2 \times(x \wedge \neg y) \\
+&x+y \rightarrow 2 y-(\neg x \wedge y)+(x \wedge \neg y) \\
+&x+y \rightarrow 2 y-(\neg x)+(\neg y) \\
+&x+y \rightarrow y+(x \wedge \neg y)+(x \wedge y) \\
+&x+y \rightarrow(\neg x \wedge y)+(x \wedge \neg y)+2 \times(x \wedge y)
+\end{aligned}
+$$
+\section{XOR}
+$$
+\begin{aligned}
+&x \oplus y \rightarrow(x \vee y)-y+(\neg x \wedge y) \\
+&x \oplus y \rightarrow(x \vee y)-(\neg x \vee y)+(\neg x) \\
+&x \oplus y \rightarrow(-1)-(\neg x \vee y)+(\neg x \wedge y) \\
+&x \oplus y \rightarrow 2 \times(x \vee y)-y-x \\
+&x \oplus y \rightarrow 2 \times(-1)-(\neg x \vee y)-(x \vee \neg y) \\
+&x \oplus y \rightarrow-y+2 \times(\neg x \wedge y)+x \\
+&x \oplus y \rightarrow-(\neg x \vee y)+2 \times(\neg x \wedge y)+(x \vee \neg y) \\
+&x \oplus y \rightarrow y+x-2 \times(x \wedge y) \\
+&x \oplus y \rightarrow(\neg x \vee y)+(x \vee \neg y)-2 \times(\neg(x \oplus y)) \\
+&x \oplus y \rightarrow y+(x \wedge \neg y)-(x \wedge y) \\
+&x \oplus y \rightarrow y+(\neg y)-(\neg(x \oplus y)) \\
+&x \oplus y \rightarrow(\neg x \vee y)+(x \wedge \neg y)-(\neg(x \oplus y))
+\end{aligned}
+$$
+\section{AND}
+$$
+\begin{aligned}
+&x \wedge y \rightarrow-(x \vee y)+y+x \\
+&x \wedge y \rightarrow 1+y+(x \vee \neg y) \\
+&x \wedge y \rightarrow(x \vee y)-(\neg x \wedge y)-(x \wedge \neg y) \\
+&x \wedge y \rightarrow(-1)-(\neg x \wedge y)-(\neg y) \\
+&x \wedge y \rightarrow-(x \oplus y)+y+(x \wedge \neg y) \\
+&x \wedge y \rightarrow-(\neg(x \wedge y))+y+(\neg y) \\
+&x \wedge y \rightarrow-(\neg(x \wedge y))+(\neg x \vee y)+(x \wedge \neg y)
+\end{aligned}
+$$
+\section{OR}
+$$
+\begin{aligned}
+&x \vee y \rightarrow(x \oplus y)+y-(\neg x \wedge y) \\
+&x \vee y \rightarrow(x \oplus y)+(\neg x \vee y)-(\neg x) \\
+&x \vee y \rightarrow(\neg(x \wedge y))+y-(\neg x) \\
+&x \vee y \rightarrow y+x-(x \wedge y) \\
+&x \vee y \rightarrow y+(x \vee \neg y)-(\neg(x \oplus y)) \\
+&x \vee y \rightarrow(\neg x \wedge y)+(x \wedge \neg y)+(x \wedge y)
+\end{aligned}
+$$
+\end{document}
