@@ -78,6 +78,7 @@
     %% of your scanned thesis assignment.
 %%    assignment         = assignment.pdf,
 }
+%\bibliography{example.bib,references.bib}
 \usepackage{makeidx}      %% The `makeidx` package contains
 \makeindex                %% helper commands for index typesetting.
 %% These additional packages are used within the document:
@@ -112,6 +113,7 @@
 \begin{document}
 \chapter{Introduction}
 %\addcontentsline{toc}{chapter}{Introduction}
+\cite{FrederickCohenOperatingEvolution}
 
 Intro goes here.
 
@@ -398,7 +400,60 @@ Selected transformations are implemented with regard to their resilience against
 \section{Instructions substitution}
 While applying basic rewrite rules for binary operations, such as the ones implemented in Obfuscator-LLVM, one can easily deobfuscate the expressions with an optimizing pass included in LLVM's \texttt{clang}, for example the \texttt{InstCombine}\footnote{\url{http://llvm.org/docs/Passes.html##instcombine-combine-redundant-instructions}} pass, which is supposed to "Combine instructions to form fewer, simple instructions." However, when the rewrite rules include MBA (\ref{mba}) expressions applied multiple times, the optimization fails to reconstruct the original expressions, as the experimental results in \cite{eyrollesMBAobf} imply. 
 
-Based on the method for generating MBA identities proposed by Zhou et al. \cite{mba_zhou}, Eyrolles has generated a list of all rewrite rules composed of three boolean expressions \cite{eyrollesMBAobf}. We have decided to implement those rules in the obfuscator, while also providing the user with an option to apply the rules in multiple iterations with randomized selection of a rewrite rule to increase code complexity and diversity. All of the implemented rewrite rules can be found in Appendix \ref{app:a}.
+Based on the method for generating MBA identities proposed by Zhou et al. \cite{mba_zhou}, Eyrolles has generated a list of all rewrite rules composed of three boolean expressions \cite{eyrollesMBAobf}. We have decided to implement a selection of those rules in the obfuscator. For each binary operation, the rewrite rule is picked randomly out of three possibilities. to increase code complexity and diversity. Below are the rewrite rules implemented in the pass.
+
+\subsection{Rewrite rules}
+\subsubsection{Addition:}
+$$
+\begin{aligned}
+%2*(x | y) - (x ^ y)
+&x+y \rightarrow(x \vee y) - (x \oplus y) \\
+%(x^(~y)) + 2*(x|y) + 1
+&x+y \rightarrow(x \oplus \neg y)+ 2 \times( x \vee y) + 1 \\
+&x+y \rightarrow(x \oplus y)+2 y-2 \times(\neg x \wedge y) \\
+\end{aligned}
+$$
+
+\subsubsection{Subtraction:}
+$$
+\begin{aligned}
+%x - y --> 2*(x & ~y) - (x ^ y)
+&x-y \rightarrow 2\times(x \wedge \neg y) - (x \oplus y) \\
+% ~(~x + y) & ~(~x + y)
+& x - y \rightarrow \neg ( \neg x + y) \wedge \neg(\neg x + y) \\
+% x - y --> x & ~y - ~x & y
+& x - y \rightarrow x \wedge \neg y - \neg x \wedge y \\
+\end{aligned}
+$$
+
+\subsubsection{XOR:}
+$$
+\begin{aligned}
+%x ^ y --> (x | y) - (x & y)
+&x \oplus y \rightarrow (x \vee y) - (x \wedge y) \\
+&x \oplus y \rightarrow(x \vee y)-y+(\neg x \wedge y) \\
+&x \oplus y \rightarrow(x \vee y)-(\neg x \vee y)+(\neg x) \\
+\end{aligned}
+$$
+
+\subsubsection{AND:}
+$$
+\begin{aligned}
+%x & y --> (~x | y) - ~x
+&x \wedge y \rightarrow (\neg x \vee y) - \neg x  \\
+&x \wedge y \rightarrow(x \vee y)-(\neg x \wedge y)-(x \wedge \neg y) \\
+&x \wedge y \rightarrow-(x \oplus y)+y+(x \wedge \neg y) \\
+\end{aligned}
+$$
+
+\subsubsection{OR:}
+$$
+\begin{aligned}
+&x \vee y \rightarrow(x \wedge \neg y) + y\\
+&x \vee y \rightarrow(x \oplus y)+y-(\neg x \wedge y) \\
+&x \vee y \rightarrow(x \oplus y)+(\neg x \vee y)-(\neg x) \\
+\end{aligned}
+$$
 
 \section{Opaque constants} \label{obf_const}
 
@@ -409,7 +464,7 @@ Let:
 \begin{itemize}
     \item $f$ be an invertible polynomial over $\mathbb{Z}/(2^n\mathbb{Z})$
     \item $g = f^{-1}$
-    \item $E$ an MBA expression non-trivially equal to zero, for example\footnote{Obtained from the 2nd rewrite rule in Appendix \ref{app:a}.} $E = x + y - (x \vee y)-(\neg x \vee y)+(\neg x)$
+    \item $E$ an MBA expression non-trivially equal to zero, for example $E = x + y - (x \vee y)-(\neg x \vee y)+(\neg x)$
     \item $C$ a constant to be obfuscated.
 \end{itemize}
 
@@ -429,13 +484,13 @@ E &= x + y - (x \vee y)-(\neg x \vee y)+(\neg x)
 Then we can encode $C$ as:
 
 \begin{align*}
-    f(C) &= 1336\cdot 123456 + 42 = 165060714 \\
+    f(C) &= 1337\cdot 123456 + 42 = 165060714 \\
     E &= 1307300694 + 2583472541 - 3724540895 - 3153898941 + 2987666601 \\
     C &= g(x + y - (x \vee y)-(\neg x \vee y)+(\neg x) + f(C)) \\
     &= 1185372425\cdot165060714 + 1753965702 = 123456
 \end{align*}
 
-The intermediate results of the functions $f$, $g$ and the MBA expression $E$ are calculated during runtime, which makes it much harder to obtain the value of $C$ during static analysis. The values of $a,b,x,y$ can be either randomly generated druing compilation (obfuscation) time,  or by injecting a call to a random number generator which executes during runtime. The third option is to use suitable program inputs or function arguments, which would hinder deobfuscation techniques based on taint analysis\footnote{Tracking flow of values in the program and identifying values and variables that influence program's outputs, as well as the control flow of the program.}. 
+The intermediate results of the functions $f$, $g$ and the MBA expression $E$ are calculated during runtime, which makes it much harder to obtain the value of $C$ during static analysis. The values of $a,b,x,y$ can be either randomly generated during compilation (obfuscation) time,  or by injecting a call to a random number generator which executes during runtime. The third option is to use suitable program inputs or function arguments, which would hinder deobfuscation techniques based on taint analysis\footnote{Tracking flow of values in the program and identifying values and variables that influence program's outputs, as well as the control flow of the program.}. 
 
 We have chosen to use a combination of these two methods for obtaining values of $a,b,x,y$ -- using suitable input values of the program when available, and using a random number generator when none of the input values can be used.
 
@@ -443,81 +498,41 @@ We have chosen to use a combination of these two methods for obtaining values of
 
 Strings, i.e. sequences of characters, are present in most of the existing programs. They are used to improve accesibility for the user interacting with the program, or to produce meaningful logging and error messages for the developers and so on. For the reverse engineer, strings can present a valuable source of information about the program. %TODO elaborate, mention strings command
 
-LLVM provides a convenient way to obfuscate all strings used in the program. During the obfuscation, the strings can be encoded using an arbitrary function which transforms them. Then, a decoding function is injected into the LLVM IR module. During runtime, the decoding function is used to obtain the original string, when needed. All the other strings remain encoded when not being used. This approach provides resilience against static analysis, while also introducing more complexity when performing dynamic analysis. 
+LLVM provides a convenient way to obfuscate all strings used in the program. During the obfuscation, the strings can be encoded using an arbitrary function which transforms them. Then, a decoding function is injected into the LLVM IR module. During runtime, the decoding function is used to obtain the original strings. This approach provides resilience against static analysis, while also introducing more complexity when performing dynamic analysis. 
 
-The encoding and decoding functions can be different for each obfuscated program, which gives us a choice to either reduce the computational overhead by using an efficient and simple encoding and decoding function, or to strengthen the obfuscation by using more complex cryptographic functions. When a keyed function is used, the key needs to be included in the obfuscated program. Other obfuscation methods, such as the one mentioned in Section \ref{obf_const}, can be used to hide the key.
+The encoding and decoding functions can be different for each obfuscated program, which gives us a choice to either reduce the computational overhead by using an efficient and simple encoding and decoding function, or to strengthen the obfuscation by using more complex functions. When a keyed function is used, the key needs to be included in the obfuscated program. A possible way to harden this transformation is to use other obfuscation methods, such as the one mentioned in Section \ref{obf_const}, to hide the key.
 
 \subsection{Encoding and decoding functions}
+For the purposes of hiding the strings, we have used two simple functions, which can be used either individually, or combined. The first one shifts every character in the string by 13, e.g. it changes every character \textit{a}, represented in decimal as 97, to character \textit{n}, represented in decimal as 110.
+
+The second, more complex function, uses a key, which is represented as a string. It iterates over the characters in the obfuscated string and performs a bitwise XOR, using a character on the corresponding position in the key string as a second operand. If the obfuscated string exceeds the length of the key, the function loops back to the first character of the key string. To add more confusion, this function obfuscates the string terminator (represented by decimal 0) as well.
 
 \section{Bogus Control Flow}
 
-\section{Control Flow Flattening}
-
-
 \chapter{Implementation}
+\section{Instructions substitution}
+Implementation of this pass is based on a tutorial\footnote{\url{https://github.com/quarkslab/llvm-dev-meeting-tutorial-2015}} published by developers from Quarkslab, which shows how to write a simple obfuscating transformation which substitutes addition operation with an MBA expression. 
+The pass iterates over instructions in a basic block, searching for instructions of \texttt{BinaryOperator} type that operate with integers. To build a new instruction, the \texttt{llvm::IRBuilder} class is used. 
+
+The random number generator which is used to pick the substitutions is created by calling \texttt{llvm::Module::createRNG()} function. It can be seeded via \texttt{-rng-seed} command line argument when running the pass, which introduces a possibility to have deterministic results. The seed can be also generated by using \texttt{\$RANDOM}, which is an internal Bash function that returns a pseudorandom integer in the range 0 -- 32767.
+
+\section{Opaque constants}
+
+\section{String obfuscation}
+Implementation of this pass is partly based on a tutorial\footnote{\url{https://github.com/tsarpaul/llvm-string-obfuscator}} for building an LLVM pass for string obfuscation. The pass iterates over global variables in the IR file, since all strings in LLVM IR are stored as global variables. When a global variable that contains a string is encountered, it is encoded, so it does not appear in its original form in the resulting binary. 
+
+Both encoding and decoding functions have to be provided in a separate LLVM IR module, named \texttt{codec.bc}. They have to be named \texttt{encode} and \texttt{decode} and their arguments need to be of type \texttt{unsigned char *}. 
+
+For each encoded string, a call to a decoding function is created and inserted into the IR file. More specifically, a \texttt{decode\_stub} function, which contains a call to a decoding function for every string, is injected at the beginning of the \texttt{main} function in the obfuscated program. This approach has some disadvantages. At some point during the execution of the program, all of the strings will appear decoded. However, this transformation is still useful to hinder static analysis, as well as dynamic analysis, especially when the decoding function is obfuscated with other transformations. The second disadvantage is that the obfuscated program needs to have a \texttt{main} function, otherwise the \texttt{decode\_stub} function can not be injected. This second issue could possibly be solved by searching for other entry points of a program, apart from \texttt{main}.
+
+The main advantage of this pass is that the user can define arbitrary encoding and decoding functions (but also needs to ensure they are working correctly\footnote{Especially when obfuscating a program written in a language with different terminating characters than \texttt{'\textbackslash0}'.}). Both functions are first loaded from a separate LLVM module (*.bc file) using the \texttt{llvm::ParseIRFile()} function. Then, the functions can be stored in an object of \texttt{llvm::Function} type. While the \texttt{decode} function is simply injected into the program, the \texttt{encode} function is directly executed during the obfuscation, by utilizing the \texttt{llvm::ExecutionEngine} abstract interface.
 
 \chapter{Evaluation}
 
+\chapter{Conclusion}
+
+
 \printbibliography[heading=bibintoc] %% Print the bibliography.
 
-\appendix %% Start the appendices.
-\chapter{MBA Rewrite Rules} \label{app:a}
-%TODO add subtraction
-\section{Addition}
-$$
-\begin{aligned}
-&x+y \rightarrow(x \vee y)+y-(\neg x \wedge y) \\
-&x+y \rightarrow(x \vee y)+(\neg x \vee y)-(\neg x) \\
-&x+y \rightarrow-1+y-(\neg x) \\
-&x+y \rightarrow 2 \times(x \vee y)-(\neg x \wedge y)-(x \wedge \neg y) \\
-&x+y \rightarrow 2 \times(-1)-(\neg x)-(\neg y) \\
-&x+y \rightarrow(x \oplus y)+2 y-2 \times(\neg x \wedge y) \\
-&x+y \rightarrow(x \oplus y)+2 \times(\neg x \vee y)-2 \times(\neg x) \\
-&x+y \rightarrow-(x \oplus y)+2 y+2 \times(x \wedge \neg y) \\
-&x+y \rightarrow 2 y-(\neg x \wedge y)+(x \wedge \neg y) \\
-&x+y \rightarrow 2 y-(\neg x)+(\neg y) \\
-&x+y \rightarrow y+(x \wedge \neg y)+(x \wedge y) \\
-&x+y \rightarrow(\neg x \wedge y)+(x \wedge \neg y)+2 \times(x \wedge y)
-\end{aligned}
-$$
-\section{XOR}
-$$
-\begin{aligned}
-&x \oplus y \rightarrow(x \vee y)-y+(\neg x \wedge y) \\
-&x \oplus y \rightarrow(x \vee y)-(\neg x \vee y)+(\neg x) \\
-&x \oplus y \rightarrow(-1)-(\neg x \vee y)+(\neg x \wedge y) \\
-&x \oplus y \rightarrow 2 \times(x \vee y)-y-x \\
-&x \oplus y \rightarrow 2 \times(-1)-(\neg x \vee y)-(x \vee \neg y) \\
-&x \oplus y \rightarrow-y+2 \times(\neg x \wedge y)+x \\
-&x \oplus y \rightarrow-(\neg x \vee y)+2 \times(\neg x \wedge y)+(x \vee \neg y) \\
-&x \oplus y \rightarrow y+x-2 \times(x \wedge y) \\
-&x \oplus y \rightarrow(\neg x \vee y)+(x \vee \neg y)-2 \times(\neg(x \oplus y)) \\
-&x \oplus y \rightarrow y+(x \wedge \neg y)-(x \wedge y) \\
-&x \oplus y \rightarrow y+(\neg y)-(\neg(x \oplus y)) \\
-&x \oplus y \rightarrow(\neg x \vee y)+(x \wedge \neg y)-(\neg(x \oplus y))
-\end{aligned}
-$$
-\section{AND}
-$$
-\begin{aligned}
-&x \wedge y \rightarrow-(x \vee y)+y+x \\
-&x \wedge y \rightarrow 1+y+(x \vee \neg y) \\
-&x \wedge y \rightarrow(x \vee y)-(\neg x \wedge y)-(x \wedge \neg y) \\
-&x \wedge y \rightarrow(-1)-(\neg x \wedge y)-(\neg y) \\
-&x \wedge y \rightarrow-(x \oplus y)+y+(x \wedge \neg y) \\
-&x \wedge y \rightarrow-(\neg(x \wedge y))+y+(\neg y) \\
-&x \wedge y \rightarrow-(\neg(x \wedge y))+(\neg x \vee y)+(x \wedge \neg y)
-\end{aligned}
-$$
-\section{OR}
-$$
-\begin{aligned}
-&x \vee y \rightarrow(x \oplus y)+y-(\neg x \wedge y) \\
-&x \vee y \rightarrow(x \oplus y)+(\neg x \vee y)-(\neg x) \\
-&x \vee y \rightarrow(\neg(x \wedge y))+y-(\neg x) \\
-&x \vee y \rightarrow y+x-(x \wedge y) \\
-&x \vee y \rightarrow y+(x \vee \neg y)-(\neg(x \oplus y)) \\
-&x \vee y \rightarrow(\neg x \wedge y)+(x \wedge \neg y)+(x \wedge y)
-\end{aligned}
-$$
+
 \end{document}
