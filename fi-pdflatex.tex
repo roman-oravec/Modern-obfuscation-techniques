@@ -121,8 +121,6 @@ Intro goes here.
  
 This chapter describes some of the obfuscation techniques from a general point of view, as those principles can be applied to obfuscate a program on the source code, intermediate representation, or machine code level. The subsequent chapters will deal with implementation details for applying those methods to a program represented in the LLVM Intermediate Representation. 
 
-
-
 \section{Obfuscating Transformations}
 
 Collberg et. al \cite{taxonomy_obf} formally defines an \textit{obfuscating transformation} as follows:
@@ -160,11 +158,7 @@ Apart from types, opaque predicates can be categorized according to the methods 
 
 \textbf{Arithmetic-based opaque predicates.} They are constructed using hard-to-solve mathematical formulas and used to hide invariant properties of the predicate. The obfuscator uses a mathematical identity that always evaluates to the same boolean value. In Collberg's taxonomy \cite{taxonomy_obf}, this type of predicate falls into the \textit{trivial} category, because the deobfuscator can deduce its value by performing a static analysis restricted to a single basic block\footnote{Basic block is a sequence of instructions executed one-after-the-other with no branching\cite{dragonBook}} of a control flow graph. 
 
-This kind of predicates is used in the \textit{Obfuscator-LLVM} in the \textit{Bogus Control Flow} pass, which adds a new basic block to the Control Flow Graph, but the branch leading to this new block is never taken. The mathematical identity used to construct the opaque predicate in this obfuscator is:
-
-\begin{equation}
-    \forall x, y \in \mathbb{Z}: (y < 10 || x \times (x + 1) \mod 2 == 0)
-\end{equation}
+This kind of predicates is used in the \textit{Obfuscator-LLVM} in the \textit{Bogus Control Flow} pass, which adds a new basic block to the Control Flow Graph, but the branch leading to this new block is never taken. 
 
 \textbf{Mixed Boolean-Arithmetic based opaque predicates.} This method is based on a technique described by Zhou et al. \cite{mba_zhou}, called \textit{Mixed Boolean Arithmetic} (MBA). 
 MBA uses linear identities involving Boolean and arithmetic operations. MBA is further discussed in Section \ref{mba}.
@@ -178,25 +172,27 @@ This method uses system calls or library calls which guarantee that the result o
 
 An example of such opaque predicate is calling the \texttt{strcpy}\footnote{https://www.cplusplus.com/reference/cstring/strcpy/} function from the C standard library and comparing the returned value (pointer to the destination array) with the first argument supplied to the function.
 
-\textbf{Bi-opaque predicates.} This method of constructing opaque predicates has been recently introduced by Xu et al. \cite{bi_opaque}. The advantage of bi-opaque predicates is that they are resilient against symbolic execution engines, such as Triton\footnote{https://triton.quarkslab.com/}, angr\footnote{https://angr.io/} and BAP\footnote{https://github.com/BinaryAnalysisPlatform/bap}. The tool\footnote{https://github.com/zzrcxb/fusor} developed by Xu et al. is built on \textit{Obfuscator-LLVM}, but replaces the trivial arithmetic-based opaque predicates with more resilient \textit{symbolic opaque predicates}, which exploit various weaknesses of symbolic execution. The \textit{bi-opaque} property means that these predicates can introduce \textit{false positives} to the analysis, which may make the reverse engineer falsely recognize legitimate predicates as opaque predicates.
+\textbf{Bi-opaque predicates.} This method of constructing opaque predicates has been recently introduced by Xu et al. \cite{bi_opaque}. The advantage of bi-opaque predicates is that they are resilient against symbolic execution engines, such as Triton\footnote{https://triton.quarkslab.com/}, angr\footnote{https://angr.io/} and BAP\footnote{https://github.com/BinaryAnalysisPlatform/bap}. The tool\footnote{https://github.com/zzrcxb/fusor} developed by Xu et al. is built on \textit{Obfuscator-LLVM}, but replaces the trivial arithmetic-based opaque predicates with more resilient \textit{symbolic} opaque predicates, which exploit various weaknesses of symbolic execution. The \textit{bi-opaque} property means that these predicates can introduce \textit{false positives} to the analysis, which may make the reverse engineer falsely recognize legitimate predicates as opaque predicates.
 
 Opaque predicates can be used to enhance other obfuscation methods, for example, the dead code insertion, described in \ref{dead}. 
 
 \subsection{Instructions Substitution} \label{substitution}
 Instructions substitution is one of the most simple obfuscation techniques. The principle of this method is to replace instructions containing binary arithmetic operations, such as addition and subtraction, and binary boolean operations, such as logical AND or XOR, with more complicated sequences of code, which yield the same result. 
 
-Despite its simplicity, this technique is still used in current obfuscation tools. For example, \textit{Obfuscator-LLVM} and \textit{Tigress} implement obfuscations that transform standard binary operators with more complex expressions in MBA (\ref{mba}) form.
+Despite its simplicity, this technique is still used in current obfuscation tools. For example, \textit{Obfuscator-LLVM} uses simple substitutions using expressions composed exclusively of arithmetic operations to substitute addition and subtraction, and expressions composed of boolean operations to substitute boolean XOR, AND and OR. Below are some of the substitutions implemented in \textit{Obfuscator-LLVM}:
 
-The following formula and other examples of substituting simple arithmetic and boolean expressions with more complex ones can be found in \cite{hackers_delight}. Zhou et al. \cite{mba_zhou} show that there is an unlimited number of such identities. 
+$$
+    \begin{aligned}
+    &x + y \rightarrow -(-x + (-y))\\
+    &x - y \rightarrow x + (-y)\\
+    %(b&c) j (bˆ c)
+    &x \vee y \rightarrow (x \wedge y) \vee (x \oplus y)\\
+    %(!b&c) j (b&!c)
+    &x \oplus y \rightarrow (\neg x \wedge y ) \vee (x \wedge \neg y)\\ 
+    \end{aligned}
+$$
 
-\begin{equation}
-\begin{split}
-    x - y & = x + \neg y + 1 \\
-    & = (x \oplus y) - 2(\neg x \& y)\\
-    & = (x \& \neg y) - (\neg x \& y) \\
-    & = 2(x \& \neg y) - (x\oplus y)
-    \end{split}
-\end{equation}
+In contrast, \textit{Tigress} implements obfuscations that transform standard binary operators with more complex expressions in MBA (\ref{mba}) form. A list of such identities can be found in \cite{hackers_delight}, where the authors suggest using them to build efficient low-level operations for manipulating bit strings and numbers. Zhou et al. described a way to use such identities in \cite{mba_zhou}, while also showing that there is an unlimited number of them. 
 
 This technique increases code diversification and it can be further improved by randomly choosing from several identities which can be used to substitute an instruction. 
 
@@ -206,7 +202,7 @@ A reverse engineer could use an optimizer on the obfuscated binary file to get r
 
 A rather bizarre example of this obfuscation technique is \textit{The M/o/Vfuscator}\footnote{https://github.com/xoreaxeaxeax/movfuscator}, created by Chris Domas. This is a tool inspired by the idea that the assembly instruction \texttt{mov} is \textit{Turing-complete}. It is able to compile a program written in C language into assembly code composed exclusively of \texttt{mov} instructions. The resulting Control-flow graph looks like a straight line and it would be probably very hard and time-consuming to reverse engineer. However, this obfuscator is more of a proof of concept than a practical tool, due to its impact on the performance of the compiled program. 
 
-There is an even more extreme obfuscator worth mentioning, called \texttt{trapcc}\footnote{https://github.com/jbangert/trapcc}. It produces programs that are able to run without executing a single instruction of the CPU, leveraging Intel's Memory Management Unit fault handling mechanism. However, this is probably not considered an instructions substitution obfuscation in its true sense. 
+There is an even more extreme obfuscator worth mentioning, called \texttt{trapcc}\footnote{https://github.com/jbangert/trapcc}. It produces programs that are able to run without executing a single instruction of the CPU, leveraging Intel's Memory Management Unit fault handling mechanism. However, this is probably not considered an instructions substitution obfuscation in the true sense. 
 
 \subsection{Garbage Code Insertion} \label{garbage}
 This technique consists of inserting arbitrary instructions into the program without making an impact on the execution of the program. The total number of different programs possible
@@ -355,14 +351,14 @@ $ opt -mem2reg -S example.ll -o example.ll
 
 \chapter{Existing tools}
 
-\section{Obfuscator-LLVM}
+\section{Obfuscator-LLVM} \label{sec:ollvm}
 
 Obfuscator-LLVM is an open-source project initiated in 2010. It aims to provide increased software security through code obfuscation and tamper-proofing\footnote{Preventing a user from modifying the software against the manufacturer's wishes.}. The project is a fork of the LLVM compilation suite, therefore it works with the LLVM IR, utilizing LLVM's possibility of writing custom transformation passes. It supports all programming languages and target platforms which are currently supported by LLVM. 
 
 The open-source version of the project implements three obfuscating transformations:
 \begin{enumerate}
     \item \textit{Instructions Substitution} is the most simple obfuscating transformation included in the project. It replaces simple binary operations with more complex ones, as described in Section \ref{substitution}. Obfuscator-LLVM supports substitution of integer additions and subtractions and the Boolean operators  AND  ($\&$),  OR  ($|$)  and  XOR  (ˆ). For example, the expression $a = b \wedge c$ is substituted as $a = (b \oplus \neg c) \wedge b$. Some of the operations have multiple substitution candidates, which are chosen randomly to increase code diversity. A full list of the implemented substitutions can be found in \cite{obfuscator-llvm}. The substitutions are rather simple and according to the authors, this transformation  can easily  be  circumvented  by  re-optimizing  the  generated  code.
-    \item \textit{Bogus Control Flow} modifies the control flow graph by inserting a new basic block before an existing one. The new basic block ends with an opaque predicate (\ref{opaque}), which always evaluates to \texttt{True}, making a conditional jump to the original basic block. The original basic block is also cloned, randomly filled up with various junk instructions, and inserted to the \texttt{False} branch leading from the new basic block. This cloned block is never reached, because of the invariant opaque predicate. The weakness in the implementation of this transformation is that it uses just a single opaque predicate: $$(y < 10\, ||\, x \cdot (x + 1) \mod 2 == 0)$$ The two global variables, $x$ and $y$, which are declared to construct this predicate, can also give a hint on where the opaque predicates are, which would make it easier for a reverse engineer to overcome this transformation. 
+    \item \textit{Bogus Control Flow} modifies the control flow graph by inserting a new basic block before an existing one. The new basic block ends with an opaque predicate (\ref{opaque}), which always evaluates to \texttt{True}, making a conditional jump to the original basic block. The original basic block is also cloned, randomly filled up with various junk instructions, and inserted to the \texttt{False} branch leading from the new basic block. This cloned block is never reached, because of the invariant opaque predicate. The weakness in the implementation of this transformation is that it uses just a single opaque predicate: $$(y < 10\, ||\, x \cdot (x - 1) \mod 2 == 0)$$ The two global variables, $x$ and $y$, which are declared to construct this predicate, can also give a hint on where the opaque predicates are, which would make it easier for a reverse engineer to overcome this transformation. 
     \item \textit{Control Flow Flattening} is implemented in a naive way, as described in Section \ref{flatten} -- by hardcoding the routing values during the obfuscation process. This implementation provides some resilience against automated analysis tools, e.g. signature-based malware scanners, but it does not propose a significant challenge for a reverse engineer or automated tools performing a more complex static analysis.
 \end{enumerate}
 
@@ -393,9 +389,9 @@ The core principle of building a new obfuscator is to use the foundations from O
 
 One way of integrating new passes using the LLVM framework is to include them in the LLVM source tree and build LLVM from source to use them during the compilation and obfuscation. The other way is to build an out-of-tree pass, which means to compile the source code of the pass separately, in an arbitrary destination, and load it with the LLVM \texttt{opt} tool to apply it on an LLVM IR module. We chose the out-of-tree method, as it is more convenient and straigtforward to use. 
 
-To make the transformations more diverse, the passees use the random number generator included in the LLVM's library, which is based on the 64-bit Mersenne Twister by Matsumoto and Nishimura and uses the module ID as a salt. This way, the user can easily supply a seed for the RNG during obfuscation, if he wants make the results of the transformations deterministic. This might prove useful while testing the obfuscated programs. 
+To make the transformations more diverse, the passes use a random number generator based on the 64-bit Mersenne Twister by Matsumoto and Nishimura (\texttt{std::mt19937}), together with the \texttt{std::random\_device} interface to generate non-deterministic random numbers.
 
-Selected transformations are implemented with regard to their resilience against reverse engineering and impact on perfromance.
+Selected transformations are implemented with regard to their resilience against reverse engineering and impact on performance.
 
 \section{Instructions substitution}
 While applying basic rewrite rules for binary operations, such as the ones implemented in Obfuscator-LLVM, one can easily deobfuscate the expressions with an optimizing pass included in LLVM's \texttt{clang}, for example the \texttt{InstCombine}\footnote{\url{http://llvm.org/docs/Passes.html##instcombine-combine-redundant-instructions}} pass, which is supposed to "Combine instructions to form fewer, simple instructions." However, when the rewrite rules include MBA (\ref{mba}) expressions applied multiple times, the optimization fails to reconstruct the original expressions, as the experimental results in \cite{eyrollesMBAobf} imply. 
@@ -468,35 +464,39 @@ Let:
     \item $C$ a constant to be obfuscated.
 \end{itemize}
 
-To obfuscate $C$, we can encode it as $C = g(E + f(C))$. For examaple, suppose we have the following in $\mathbb{Z}/(2^n)$ with 32-bit words\footnote{All calculations are $\mod 2^{32}$}, $f$ is a linear function with coefficient $a$ being an odd integer and $b$ any integer of $\mathbb{Z}/(2^n\mathbb{Z})$:
+To obfuscate $C$, we can encode it as $C = g(E + f(C))$. The following example will show how the process works in practice. Suppose we are performing calculations in $\mathbb{Z}/(2^n)$ with 32-bit words\footnote{All calculations are $\mod 2^{32}$}, $f$ is a linear function with coefficient $a$ being an odd integer, so that it is invertible $\mod 2^{32}$ and $b$ is an arbitrary integer, while all integer values are 32 bits large:
 
 \begin{align*}
 C & = 123456 \\
 a &= 1337 \\
-b &= 42 \\
+b &= 42\\
 x &= 1307300694 \\
 y &= 2583472541 \\
 f(x) &= ax + b = 1337x + 42\\
-g(x) &= a^{-1}x + (-a^{-1}b) = 1337^{-1}x + (-1337^{-1}\cdot 42) \\&= 1185372425x + 1753965702 \\
+g(x) &= a^{-1}x + (-a^{-1}b) \\
+&= 1337^{-1}x + (-1337^{-1}\cdot 42) 
+\\&= 1185372425x + 1753965702 \\
 E &= x + y - (x \vee y)-(\neg x \vee y)+(\neg x)
 \end{align*}
 
 Then we can encode $C$ as:
 
 \begin{align*}
-    f(C) &= 1337\cdot 123456 + 42 = 165060714 \\
-    E &= 1307300694 + 2583472541 - 3724540895 - 3153898941 + 2987666601 \\
+    f(C) &= 1337\cdot 123456 + 42 = 165060672 + 42 \\
+    E &= 1307300694 + 2583472541 - 3724540895\\& - 3153898941 + 2987666601 = 0 \\
     C &= g(x + y - (x \vee y)-(\neg x \vee y)+(\neg x) + f(C)) \\
-    &= 1185372425\cdot165060714 + 1753965702 = 123456
+    &= g(0 + 165060672 + 42) \\
+    &= 1185372425\cdot165060714 + 2541001594\\
+    &= 123456 \mod 2^{32}
 \end{align*}
 
 The intermediate results of the functions $f$, $g$ and the MBA expression $E$ are calculated during runtime, which makes it much harder to obtain the value of $C$ during static analysis. The values of $a,b,x,y$ can be either randomly generated during compilation (obfuscation) time,  or by injecting a call to a random number generator which executes during runtime. The third option is to use suitable program inputs or function arguments, which would hinder deobfuscation techniques based on taint analysis\footnote{Tracking flow of values in the program and identifying values and variables that influence program's outputs, as well as the control flow of the program.}. 
 
-We have chosen to use a combination of these two methods for obtaining values of $a,b,x,y$ -- using suitable input values of the program when available, and using a random number generator when none of the input values can be used.
+For the purposes of testing and demonstration of this obfuscation method, we have chosen to generate the values of $a,b,x,y$ -- by using a random number generator during the compilation time.
 
 \section{String obfuscation}
 
-Strings, i.e. sequences of characters, are present in most of the existing programs. They are used to improve accesibility for the user interacting with the program, or to produce meaningful logging and error messages for the developers and so on. For the reverse engineer, strings can present a valuable source of information about the program. %TODO elaborate, mention strings command
+Strings, i.e. sequences of characters, are present in most of the existing programs. They are used to improve accessibility for the user interacting with the program, or to produce meaningful logging and error messages for the developers and so on. For the reverse engineer, strings can present a valuable source of information about the program. %TODO elaborate, mention strings command
 
 LLVM provides a convenient way to obfuscate all strings used in the program. During the obfuscation, the strings can be encoded using an arbitrary function which transforms them. Then, a decoding function is injected into the LLVM IR module. During runtime, the decoding function is used to obtain the original strings. This approach provides resilience against static analysis, while also introducing more complexity when performing dynamic analysis. 
 
@@ -507,7 +507,34 @@ For the purposes of hiding the strings, we have used two simple functions, which
 
 The second, more complex function, uses a key, which is represented as a string. It iterates over the characters in the obfuscated string and performs a bitwise XOR, using a character on the corresponding position in the key string as a second operand. If the obfuscated string exceeds the length of the key, the function loops back to the first character of the key string. To add more confusion, this function obfuscates the string terminator (represented by decimal 0) as well.
 
-\section{Bogus Control Flow}
+\section{Bogus Control Flow} \label{des_bogus}
+
+Bogus Control Flow pass is one of the passes included in \textit{Obfuscator-LLVM} (\ref{sec:ollvm}). The weakness of the original implementation is that it uses just a simple opaque predicate with two global variables, both initiated to zero. Any experienced reverse engineer could probably detect this type of opaque predicate by just simply looking at the disassembled program, while automated tools based on symbolic execution would definitely identify the predicate and simplify it. 
+
+We have decided to improve this pass by replacing the weak opaque predicate by two types of stronger ones.
+
+\subsection{Basic invariant opaque predicates}
+Predicates of this type are composed of mathematical formulas which are always \texttt{True} (invariant). They include basic arithmetic operations ($+, -, \times, \div$) and remainder operations. MBA (\ref{mba}) is not used here, because running the Instructions Substitution pass would turn the simple operations into MBA anyways, therefore implementing them here as well would result in redundancy and decreased modularity. Following formulas, taken from \cite{loop}, are included in the pass:
+
+$$
+\begin{aligned}
+x &\neq 7y^2 - 1  \\
+0 &\neq (x^2 + 1) \mod7 \\
+0 &\neq (x^2 + x + 7) \mod 81  \\
+0 &\neq (4x^2 + 4) \mod 19 \\
+\end{aligned}
+$$
+
+To further harden these predicates, we use input arguments of the obfuscated function for for the variables $x$ and $y$. Since the formulas are always true for an arbitrary integer, the predicate will always lead to a correct block. Using the function arguments in the opaque predicate may prevent various deobfuscation tools and techniques based on taint analysis (e. g. \cite{generic_deobfuscation}) from detecting and removing the predicate. 
+
+When the function does not have suitable arguments, one or two global variables (depending on the number of available integer arguments) are created and initialized to a random value. 
+
+\subsection{Symbolic memory opaque predicates}
+This type of opaque predicate is based on the ideas first proposed by Collberg et al. \cite{manufacturing_opaque}. The exact method to construct is described in \cite{bi_opaque}. This is the technique which we have decided to implement\footnote{Although a similar implementation can be found at \url{https://github.com/hxuhack/symobfuscator}}. 
+
+The predicate is constructed by creating two arrays and using an input value of the obfuscated function. The remainder $r$ after division of the input value by the size of the first array is used as an index to get the $r$=th element from the first array. This element then serves as an index to the second array, which yields an element from the second array that can be used to construct the opaque predicate. 
+
+Since the value of the resulting element from the second array depends on the input symbol, detecting and removing this type of opaque predicate presents a hard problem (first described by King \cite{King1976}) for deobfuscation tools based on symbolic execution. 
 
 \chapter{Implementation}
 \section{Instructions substitution}
@@ -517,15 +544,35 @@ The pass iterates over instructions in a basic block, searching for instructions
 The random number generator which is used to pick the substitutions is created by calling \texttt{llvm::Module::createRNG()} function. It can be seeded via \texttt{-rng-seed} command line argument when running the pass, which introduces a possibility to have deterministic results. The seed can be also generated by using \texttt{\$RANDOM}, which is an internal Bash function that returns a pseudorandom integer in the range 0 -- 32767.
 
 \section{Opaque constants}
+Boilerplate code for this pass is from Quarkslab developers blog\footnote{\url{https://blog.quarkslab.com/turning-regular-code-into-atrocities-with-llvm.html}}. However, the core principles and scope of obfuscation are fundamentally different. As described in Section \ref{obf_const}, this pass obfuscates unsigned 32-bit integer values. 
+
+The main loop iterates over instructions of a basic block, ignoring those which are either a call to a function, switch, or a GEP\footnote{Get Element Pointer -- used to get the address of a subelement of an aggregate data structure.} instruction. When a suitable instruction is found, the pass checks whether some of its operands are constant 32-bit positive integers. Afterwards, the program proceeds to build an expression described in Section \ref{obf_const}. To find the modular inverse of $a$, \texttt{boost::integer::mod\_inverse()} function from the Boost\footnote{\url{https://www.boost.org/}} library is being used. Some of the values, most importantly, the multiplication of the obfuscated constant by the coefficient $a$ in function $f$, are computed during compilation time. Other parts, such as the expression $E$ and composition of functions $f$ and $g$, are created using the \texttt{llvm::IRBuilder}, which is instantiated with the first template argument being \texttt{NoFolder}. This template argument specifies a class used for constants. The default option -- \texttt{ConstantFolder} -- performs constant folding during compilation time, which could possibly weaken this obfuscating transformation, therefore \texttt{NoFolder} is used. 
+
+
 
 \section{String obfuscation}
 Implementation of this pass is partly based on a tutorial\footnote{\url{https://github.com/tsarpaul/llvm-string-obfuscator}} for building an LLVM pass for string obfuscation. The pass iterates over global variables in the IR file, since all strings in LLVM IR are stored as global variables. When a global variable that contains a string is encountered, it is encoded, so it does not appear in its original form in the resulting binary. 
 
 Both encoding and decoding functions have to be provided in a separate LLVM IR module, named \texttt{codec.bc}. They have to be named \texttt{encode} and \texttt{decode} and their arguments need to be of type \texttt{unsigned char *}. 
 
-For each encoded string, a call to a decoding function is created and inserted into the IR file. More specifically, a \texttt{decode\_stub} function, which contains a call to a decoding function for every string, is injected at the beginning of the \texttt{main} function in the obfuscated program. This approach has some disadvantages. At some point during the execution of the program, all of the strings will appear decoded. However, this transformation is still useful to hinder static analysis, as well as dynamic analysis, especially when the decoding function is obfuscated with other transformations. The second disadvantage is that the obfuscated program needs to have a \texttt{main} function, otherwise the \texttt{decode\_stub} function can not be injected. This second issue could possibly be solved by searching for other entry points of a program, apart from \texttt{main}.
+For each encoded string, a call to a decoding function is created and inserted into the IR file. More specifically, a \texttt{decode\_stub()} function, which contains a call to a decoding function for every string, is injected at the beginning of the \texttt{main()} function in the obfuscated program. This approach has some disadvantages. At some point during the execution of the program, all of the strings will appear decoded. However, this transformation is still useful to hinder static analysis, as well as dynamic analysis, especially when the decoding function is obfuscated with other transformations. The second disadvantage is that the obfuscated program needs to have a \texttt{main()} function, otherwise the \texttt{decode\_stub()} function can not be injected. This second issue could possibly be solved by searching for other entry points of a program, apart from \texttt{main()}.
 
-The main advantage of this pass is that the user can define arbitrary encoding and decoding functions (but also needs to ensure they are working correctly\footnote{Especially when obfuscating a program written in a language with different terminating characters than \texttt{'\textbackslash0}'.}). Both functions are first loaded from a separate LLVM module (*.bc file) using the \texttt{llvm::ParseIRFile()} function. Then, the functions can be stored in an object of \texttt{llvm::Function} type. While the \texttt{decode} function is simply injected into the program, the \texttt{encode} function is directly executed during the obfuscation, by utilizing the \texttt{llvm::ExecutionEngine} abstract interface.
+The main advantage of this pass is that the user can define arbitrary encoding and decoding functions (but also needs to ensure they are working correctly\footnote{Especially when obfuscating a program written in a language with different terminating characters than \texttt{'\textbackslash0}'.}). Both functions are first loaded from a separate LLVM module (*.bc file) using the \texttt{llvm::ParseIRFile()} function. Then, the functions can be stored in an object of \texttt{llvm::Function} type. While the \texttt{decode()} function is simply injected into the IR module, the \texttt{encode()} function is directly executed during the obfuscation, by utilizing the \texttt{llvm::ExecutionEngine} abstract interface.
+
+\section{Bogus Control Flow}
+The code for splitting and cloning the basic blocks is taken from the original Bogus Control Flow pass in \textit{Obfuscator-LLVM}, with just a slight modification. 
+
+The original code had a bug in function \texttt{AddBogus()}, which is responsible for splitting the basic blocks, creating new branches and inserting placeholder instructions, which are later replaced by an opaque predicate. The bug is related to the exception handling mechanism in LLVM IR -- when a basic block might throw an exception, the terminator instruction at the end of the block is an \texttt{invoke} instruction, which can either lead to a regular basic block, or a special basic block that starts with a \texttt{landingpad} instruction and handles the thrown exception. The label of this block is marked with \texttt{unwind} keyword. 
+
+However, when the block with \texttt{landingpad} is obfuscated, a new block, which starts with the opaque predicate, is inserted before the original one. This causes a situation when the \texttt{unwind} label leads to a block that does not start with \texttt{landingpad} instruction, generating an invalid IR module. Also, the new block with the \texttt{landingpad} instruction does not have an incoming edge marked as \texttt{unwind}, coming from an \texttt{invoke} instruction. Both of those facts result in a compilation failure.
+
+Luckily, the \texttt{llvm::VerifierPass} was able to detect this erroneous behavior and display a corresponding error message. To fix this issue, we have added a check at the beggining of the \texttt{AddBogus()} function, to find out whether a block contains a \texttt{landingpad} instruction, so that such blocks can be skipped and not obfuscated. 
+
+Our main contribution to this pass are the \texttt{getSimpleOP()} and \texttt{getSymOP()} functions, which construct the opaque predicates that are described in Section \ref{des_bogus}. First, the pass iterates through the obfuscated function arguments and stores those which are 32-bit integers. 
+
+If such arguments are found, they are used to create an opaque predicate. In the \texttt{getSimpleOP()} function, the values of the obfuscated function arguments are divided by INT8\_MAX (127) and the remainders are used as the values for $x$ and $y$ in the formulas. This way, we prevent a situation when a result of some of the operations might overflow the type of the value where it is being stored, while we also reduce the computational overhead of the obfuscated program. One of the four formulas is then picked randomly to construct the predicate, which is inserted into the basic block afterwards. 
+
+The implementation of the \texttt{getSymOP()} function is more complex. First, it allocates two arrays of integers on the stack and initializes their values (a range from 0 to array size minus one). Then, a remainder of a division of the input argument by the size of the first array is stored in a virtual register by creating a \texttt{srem} (signed remainder) instruction. This register is then used as the second index in a \texttt{getelementptr}\footnote{\url{https://llvm.org/docs/GetElementPtr.html}} instruction, accessing the first array. An element pointed to by the result of this \texttt{getelementptr} instruction is then stored into a new virtual register, which is used as an index for a second \texttt{getelementptr} instruction, indexing the second array. At this point, our implementation is a bit different from the design proposed in \cite{bi_opaque}. Since the values in the arrays correspond to the indices they are stored at, the elements obtained from both arrays are always equal. This allows us to construct an invariant opaque predicate by creating an \texttt{icmp} (integer comparison) instruction with the two elements as its operands, while the result of this comparison is always true. We suppose that this simplified implementation, however, does not weaken the resilience of the opaque predicates against symbolic execution. 
 
 \chapter{Evaluation}
 
