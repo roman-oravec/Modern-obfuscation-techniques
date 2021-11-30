@@ -19,7 +19,7 @@ return:
 
 define i32 @main() {
 entry:
-  %call = call i32 @puts(i8* getelementptr inbounds ([8 x i8], [8 x i8]* @.str, i64 0, i64 0))
+  %call = call i32 @puts(i8* getelementptr inbounds([8 x i8], [8 x i8]* @.str, i64 0, i64 0))
   %call1 = call i32 @foo()
   ret i32 0
 }

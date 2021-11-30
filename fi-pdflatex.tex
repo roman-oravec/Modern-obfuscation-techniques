@@ -14,7 +14,7 @@
 %%  color,   %% Uncomment these lines (by removing the %% at the
 %%           %% beginning) to use color in the digital version of your
 %%           %% document
-  table,   %% The `table` option causes the coloring of tables.
+  notable,   %% The `table` option causes the coloring of tables.
            %% Replace with `notable` to restore plain LaTeX tables.
   twoside, %% The `twoside` option enables double-sided typesetting.
            %% Use at least 120 g/m² paper to prevent show-through.
@@ -107,13 +107,31 @@
 \usepackage{floatrow} %% Putting captions above tables
 \floatsetup[table]{capposition=top}
 
+\usepackage{minted} % Code highlighting
+\setminted{
+frame=lines,
+framesep=2mm,
+baselinestretch=1.2,
+fontsize=\footnotesize,
+linenos,
+breaklines
+}
+\usemintedstyle{vs}
+\usepackage{etoolbox,xpatch}
+
+\makeatletter
+\AtBeginEnvironment{minted}{\dontdofcolorbox}
+\def\dontdofcolorbox{\renewcommand\fcolorbox[4][]{##4}}
+\xpatchcmd{\inputminted}{\minted@fvset}{\minted@fvset\dontdofcolorbox}{}{}
+\xpatchcmd{\mintinline}{\minted@fvset}{\minted@fvset\dontdofcolorbox}{}{} % see https://tex.stackexchange.com/a/401250/
+\makeatother
+
 \theoremstyle{definition}
 \newtheorem{definition}{Definition}[section]
 
 \begin{document}
 \chapter{Introduction}
 %\addcontentsline{toc}{chapter}{Introduction}
-\cite{FrederickCohenOperatingEvolution}
 
 Intro goes here.
 
@@ -124,7 +142,6 @@ This chapter describes some of the obfuscation techniques from a general point o
 \section{Obfuscating Transformations}
 
 Collberg et. al \cite{taxonomy_obf} formally defines an \textit{obfuscating transformation} as follows:
-
 
 \begin{definition}[Obfuscating transformation]{\ \\} \label{def:transformation}
 Let $P \xrightarrow{\text{T}} P'$ be a transformation of a source program $P$ into a target program $P'$.
@@ -277,6 +294,20 @@ Another issue with this obfuscation method is the computational overhead it intr
 
 %TODO add more, maybe virtualization
 
+\section{Evaluating Obfuscating Transformations} \label{sec:eval}
+Determining usefulness of an obfuscating transformation is a complex task. When designing and evaluating an obfuscating transformation, one needs to consider multiple criteria, such as how hard would it be for an adversary (e.g. a reverse engineer) to understand the functionality of an obfuscated program $P'$, how hard would it be to construct a deobfuscator, or how much resources would a deobfuscator need to reconstruct the original program $P$, given $P'$ as an input. Unless the deobfuscation process is fully automated, these criteria will never be fully objective, since they will always, at least partly, depend on cognitive abilities of the attacker. 
+
+Collberg et al. proposed some metrics \cite{taxonomy_obf}, which can be used to quantify and approximate the quality of obfuscation methods. They have defined the following three criteria: 
+\begin{itemize}
+    \item \textit{Potency} consists of various metrics which were originally designed to be used to measure software complexity in the field of software engineering, for example the number of operators and operands in $P$, number of predicates (cyclomatic complexity) in a function, or a nesting level of conditional statements in a function.
+    
+    \item \textit{Resilience} is measured on a four point scale, ranging from \textit{trivial} to \textit{one-way}. The value of resilience depends on two parameters -- \textit{programmer effort} -- how much time would a programmer need to construct a deobfuscator to reduce the \textit{potency} of a transformation, and \textit{deobfuscator effort} -- time and space complexity of a deobfuscator which can reduce the \textit{potency} of a transformation. \textit{Programmer effort} is based on the scope of the transformation, from local to inter-process, while \textit{deobfuscator effort} could be either polynomial or exponential.
+    \item \textit{Cost} of a transformation measures how much execution time and space overhead would a transformation introduce to the obfuscated program. This value is also measured on a four point scale, ranging from \textit{free} (transformation adds a constant overhead) to \textit{dear} ($P'$ requires exponentially more resources than $P$).
+\end{itemize}
+
+Mohsen and Pinto \cite{eval2016} proposed using Kolmogorov complexity \cite{Kolmogorov1998} to measure the quality of obfuscation. Kolmogorov complexity can be described as the shortest length of a program, which can produce given object (e.g. a binary string, or an obfuscated program). Due to the undecidability of the halting problem, exact Kolmogorov complexity can not be computed. However, it can be estimated using compression algorithms. More specifically, Kolmogorov complexity is the lower bound of a compression algorithm.  
+
+The idea to use Kolmogorov complexity to quantify the quality of obfuscation is based on an assumption that obfuscation produces irregularities in the obfuscated code (e.g. by inserting opaque predicates, or cloning diversifying basic blocks), thus making it less comprehensible for the adversary. A program that contains more regular patterns can be compressed with higher rate, and thus has a lower Kolmogorov complexity. In contrast, an obfuscated program would have higher Kolmogorov complexity, which implies that it is a usable metric for evaluating obfuscation, as shown in \cite{Kolmogorov1998}. 
 
 \chapter{LLVM}
 
@@ -320,11 +351,11 @@ The LLVM IR is a low-level language similar to assembly. However, it provides va
 
 The Intermediate Representation is organized into modules -- each module corresponding to a single source file (also referred to as translation unit). During the compilation process, separate modules are linked with the LLVM Linker, also called LLD, to produce the executable file. Modules generally contain functions and global variables, both of which are called \textit{global values}. Global values are represented by a pointer to a memory location and their identifiers begin with the '@' character. In addition to global value identifiers, there are also local identifiers, prefixed with the '\%' character. They are typically used for register names and types. 
 
-\begin{figure}
-    \lstinputlisting[language=llvm,style=nasm]{example.ll}
+\begin{listing}
+    \inputminted{llvm}{example.ll}
     \caption{Example of a short LLVM IR module. Some parts, such as target architecture information, metadata, and comments, have been omitted for better readability. Also, the compiler optimizations have been disabled.}
     \label{fig:ir_example}
-\end{figure}
+\end{listing}
 
 Figure \ref{fig:ir_example} shows a simple program in LLVM IR, which can be used to further introduce the LLVM IR syntax. On the first line, there is a definition of a global variable, a constant string, named \texttt{.str}. It consists of 12 characters, size of each of them is 8 bits. The \texttt{private} keyword states that this value is only directly accessible by objects in the current module and \texttt{unnamed\_addr} indicates that the address is not significant, only the content. Constants marked like this can be merged with other constants if they have the same initializer. 
 
@@ -387,10 +418,6 @@ Tigress is a source-to-source obfuscator for C language, developed by Collberg\f
 
 The core principle of building a new obfuscator is to use the foundations from Obfuscator-LLVM, while improving its currently available transformations and writing some new ones from scratch. Thanks to the modularity of the LLVM pass framework, each of the transformation passes can be applied independently, in a sequence, or together with the original Obfuscator-LLVM passes. 
 
-One way of integrating new passes using the LLVM framework is to include them in the LLVM source tree and build LLVM from source to use them during the compilation and obfuscation. The other way is to build an out-of-tree pass, which means to compile the source code of the pass separately, in an arbitrary destination, and load it with the LLVM \texttt{opt} tool to apply it on an LLVM IR module. We chose the out-of-tree method, as it is more convenient and straigtforward to use. 
-
-To make the transformations more diverse, the passes use a random number generator based on the 64-bit Mersenne Twister by Matsumoto and Nishimura (\texttt{std::mt19937}), together with the \texttt{std::random\_device} interface to generate non-deterministic random numbers.
-
 Selected transformations are implemented with regard to their resilience against reverse engineering and impact on performance.
 
 \section{Instructions substitution}
@@ -403,10 +430,10 @@ Based on the method for generating MBA identities proposed by Zhou et al. \cite{
 $$
 \begin{aligned}
 %2*(x | y) - (x ^ y)
-&x+y \rightarrow(x \vee y) - (x \oplus y) \\
+&x+y \rightarrow 2(x \vee y) - (x \oplus y) \\
 %(x^(~y)) + 2*(x|y) + 1
-&x+y \rightarrow(x \oplus \neg y)+ 2 \times( x \vee y) + 1 \\
-&x+y \rightarrow(x \oplus y)+2 y-2 \times(\neg x \wedge y) \\
+&x+y \rightarrow(x \oplus \neg y)+ 2( x \vee y) + 1 \\
+&x+y \rightarrow(x \oplus y)+2 y-2 (\neg x \wedge y) \\
 \end{aligned}
 $$
 
@@ -414,7 +441,7 @@ $$
 $$
 \begin{aligned}
 %x - y --> 2*(x & ~y) - (x ^ y)
-&x-y \rightarrow 2\times(x \wedge \neg y) - (x \oplus y) \\
+&x-y \rightarrow 2(x \wedge \neg y) - (x \oplus y) \\
 % ~(~x + y) & ~(~x + y)
 & x - y \rightarrow \neg ( \neg x + y) \wedge \neg(\neg x + y) \\
 % x - y --> x & ~y - ~x & y
@@ -496,7 +523,7 @@ For the purposes of testing and demonstration of this obfuscation method, we hav
 
 \section{String obfuscation}
 
-Strings, i.e. sequences of characters, are present in most of the existing programs. They are used to improve accessibility for the user interacting with the program, or to produce meaningful logging and error messages for the developers and so on. For the reverse engineer, strings can present a valuable source of information about the program. %TODO elaborate, mention strings command
+Strings, i.e. sequences of characters, are present in most of the existing programs. They are used to improve accessibility for the user interacting with the program, or to produce meaningful logging and error messages for the developers. For the reverse engineer, strings can present a valuable source of information about the program. They can be easily viewed in common decompiler and disassmbler software, as well as displayed in \texttt{bash} by using \texttt{strings}\footnote{\url{https://linux.die.net/man/1/strings}} command.
 
 LLVM provides a convenient way to obfuscate all strings used in the program. During the obfuscation, the strings can be encoded using an arbitrary function which transforms them. Then, a decoding function is injected into the LLVM IR module. During runtime, the decoding function is used to obtain the original strings. This approach provides resilience against static analysis, while also introducing more complexity when performing dynamic analysis. 
 
@@ -537,11 +564,52 @@ The predicate is constructed by creating two arrays and using an input value of 
 Since the value of the resulting element from the second array depends on the input symbol, detecting and removing this type of opaque predicate presents a hard problem (first described by King \cite{King1976}) for deobfuscation tools based on symbolic execution. 
 
 \chapter{Implementation}
+One way of integrating new passes using the LLVM framework is to include them in the LLVM source tree and build LLVM from source to use them during the compilation and obfuscation. The other way is to build an out-of-tree pass, which means to compile the source code of the pass separately, in an arbitrary destination, and load it with the LLVM \texttt{opt} tool to apply it on an LLVM IR module. We chose the out-of-tree method, as it is more convenient and straigtforward to use. 
+
+To make the transformations more diverse, the passes use a random number generator based on the 64-bit Mersenne Twister by Matsumoto and Nishimura (\texttt{std::mt19937}), together with the \texttt{std::random\_device} interface to generate non-deterministic random numbers.
+%TODO: general impl details
 \section{Instructions substitution}
 Implementation of this pass is based on a tutorial\footnote{\url{https://github.com/quarkslab/llvm-dev-meeting-tutorial-2015}} published by developers from Quarkslab, which shows how to write a simple obfuscating transformation which substitutes addition operation with an MBA expression. 
 The pass iterates over instructions in a basic block, searching for instructions of \texttt{BinaryOperator} type that operate with integers. To build a new instruction, the \texttt{llvm::IRBuilder} class is used. 
 
-The random number generator which is used to pick the substitutions is created by calling \texttt{llvm::Module::createRNG()} function. It can be seeded via \texttt{-rng-seed} command line argument when running the pass, which introduces a possibility to have deterministic results. The seed can be also generated by using \texttt{\$RANDOM}, which is an internal Bash function that returns a pseudorandom integer in the range 0 -- 32767.
+For each substituted instruction, the pass generates a random number from a uniform integer distribution in range from 1 to 3 (number of available substitutions) using the random number generator described in the beginning of this chapter. After the new instructions are generated and their result is stored in a new virtual register, we call the \texttt{llvm::ReplaceInstWithValue()} function, which replaces all uses of the original instruction in the basic block, and removes the original instruction. 
+
+This pass can be applied to the module multiple times, recursively generating more complex MBA expressions with each iteration. Listings 2 and 3 show how a simple instruction -- \texttt{\%add = add i32 \%a, \%b} -- which performs addition and stores the result in \texttt{\%add}, gets obfuscated after two iterations of this pass.
+
+\begin{listing}
+\begin{minted}{llvm}
+  %2 = xor i32 %a, %b
+  %3 = or i32 %a, %b
+  %4 = mul i32 2, %3
+  %add = sub i32 %4, %2  
+\end{minted}
+\label{lst:sub1}
+\caption{IR code after using the substitution:\\ $x+y \rightarrow 2(x \vee y) - (x \oplus y)$.}
+\end{listing}
+
+\begin{listing}
+\begin{minted}{llvm}
+  %2 = xor i32 %a, -1
+  %3 = xor i32 %a, -1
+  %4 = or i32 %3, %b
+  %5 = or i32 %a, %b
+  %6 = sub i32 %5, %4
+  %7 = add i32 %6, %2
+  %8 = or i32 %a, %b
+  %9 = mul i32 2, %8
+  %10 = sub i32 0, %9
+  %11 = add i32 %10, %7
+  %12 = sub i32 0, %11
+  %13 = sub i32 0, %9
+  %14 = add i32 %13, %7
+  %15 = sub i32 0, %14
+  %add = and i32 %15, %12 
+\end{minted}
+\label{lst:sub2}
+\caption{IR code from Listing 2 after substituting:\\
+$x\oplus y \rightarrow(x \vee y)-(\neg x \vee y)+(\neg x)\\
+x - y \rightarrow \neg ( \neg x + y) \wedge \neg(\neg x + y)$}
+\end{listing}
 
 \section{Opaque constants}
 Boilerplate code for this pass is from Quarkslab developers blog\footnote{\url{https://blog.quarkslab.com/turning-regular-code-into-atrocities-with-llvm.html}}. However, the core principles and scope of obfuscation are fundamentally different. As described in Section \ref{obf_const}, this pass obfuscates unsigned 32-bit integer values. 
@@ -559,6 +627,8 @@ For each encoded string, a call to a decoding function is created and inserted i
 
 The main advantage of this pass is that the user can define arbitrary encoding and decoding functions (but also needs to ensure they are working correctly\footnote{Especially when obfuscating a program written in a language with different terminating characters than \texttt{'\textbackslash0}'.}). Both functions are first loaded from a separate LLVM module (*.bc file) using the \texttt{llvm::ParseIRFile()} function. Then, the functions can be stored in an object of \texttt{llvm::Function} type. While the \texttt{decode()} function is simply injected into the IR module, the \texttt{encode()} function is directly executed during the obfuscation, by utilizing the \texttt{llvm::ExecutionEngine} abstract interface.
 
+To harden this obfuscation pass, we tell the compiler to always inline the decode function, by adding the \texttt{llvm::Attribute::AlwaysInline} attribute to it in the pass. This measure does not appear explicitly in the bitcode, since the inlining will be performed by the backend and the result is observable in the compiled program. 
+
 \section{Bogus Control Flow}
 The code for splitting and cloning the basic blocks is taken from the original Bogus Control Flow pass in \textit{Obfuscator-LLVM}, with just a slight modification. 
 
@@ -572,9 +642,74 @@ Our main contribution to this pass are the \texttt{getSimpleOP()} and \texttt{ge
 
 If such arguments are found, they are used to create an opaque predicate. In the \texttt{getSimpleOP()} function, the values of the obfuscated function arguments are divided by INT8\_MAX (127) and the remainders are used as the values for $x$ and $y$ in the formulas. This way, we prevent a situation when a result of some of the operations might overflow the type of the value where it is being stored, while we also reduce the computational overhead of the obfuscated program. One of the four formulas is then picked randomly to construct the predicate, which is inserted into the basic block afterwards. 
 
-The implementation of the \texttt{getSymOP()} function is more complex. First, it allocates two arrays of integers on the stack and initializes their values (a range from 0 to array size minus one). Then, a remainder of a division of the input argument by the size of the first array is stored in a virtual register by creating a \texttt{srem} (signed remainder) instruction. This register is then used as the second index in a \texttt{getelementptr}\footnote{\url{https://llvm.org/docs/GetElementPtr.html}} instruction, accessing the first array. An element pointed to by the result of this \texttt{getelementptr} instruction is then stored into a new virtual register, which is used as an index for a second \texttt{getelementptr} instruction, indexing the second array. At this point, our implementation is a bit different from the design proposed in \cite{bi_opaque}. Since the values in the arrays correspond to the indices they are stored at, the elements obtained from both arrays are always equal. This allows us to construct an invariant opaque predicate by creating an \texttt{icmp} (integer comparison) instruction with the two elements as its operands, while the result of this comparison is always true. We suppose that this simplified implementation, however, does not weaken the resilience of the opaque predicates against symbolic execution. 
+The implementation of the \texttt{getSymOP()} function is more complex. First, it allocates two arrays of integers on the stack and initializes their values (a range from 0 to array size minus one). Then, a remainder of a division of the input argument by the size of the first array is stored in a virtual register by creating a \texttt{srem} (signed remainder) instruction. This register is then used as the second index in a \texttt{getelementptr}\footnote{\url{https://llvm.org/docs/GetElementPtr.html}} instruction, indexing the first array. An element pointed to by the result of this \texttt{getelementptr} instruction is then stored into a new virtual register, which is used as an index for a second \texttt{getelementptr} instruction, indexing the second array. 
 
-\chapter{Evaluation}
+At this point, our implementation is a bit different from the design proposed in \cite{bi_opaque}. Since the values in the arrays correspond to the indices they are stored at, the elements obtained from both arrays are always equal. This allows us to construct an invariant opaque predicate by creating an \texttt{icmp} (integer comparison) instruction with the two elements as its operands, while the result of this comparison is always true. We suppose that this simplified implementation, however, does not weaken the resilience of the opaque predicates against symbolic execution, since we are still using the symbolic variable (input argument) to calculate the indices of the arrays.
+
+Listing \ref{lst:sym} shows a snippet of the generated IR code that performs described operations (initialization of the arrays \texttt{\%arr1} and \texttt{\%arr2} is omitted). The obfuscated function is \texttt{main()} with standard arguments \texttt{(int argc, char *argv[])}, therefore the symbolic value used in this case is \texttt{\%argc}.
+
+\begin{listing}[!h]
+\begin{minted}{llvm}
+%allocaInst = alloca i32
+store i32 %argc, i32* %allocaInst
+%loadInst = load i32, i32* %allocaInst
+%load64 = sext i32 %loadInst to i64
+%0 = srem i64 %load64, 8
+%idx_1 = getelementptr inbounds [8 x i64], [8 x i64]* %arr1, i32 0, i64 %0
+%1 = load i64, i64* %idx_1
+%idx_2 = getelementptr inbounds [8 x i64], [8 x i64]* %arr2, i32 0, i64 %1
+%2 = load i64, i64* %idx_2
+%ArrOpq = icmp eq i64 %2, %1
+\end{minted}
+\caption{IR code for constructing symbolic opaque predicates.}
+\label{lst:sym}
+\end{listing}
+
+\section{Limitations and possible extensions}
+The passes have been implemented as a proof-of-concept for demonstration and testing purposes. Following ideas can be a topic for future research.
+\begin{itemize}
+    \item To make the obfuscation more user friendly, a scheduling pass can be implemented, which would run individual passes, together with LLVM optimisation passes, in a sequence specified by the user. 
+    \item For deterministic results, a random number generator that could be seeded with a value provided by the user can be used instead of the current RNG. 
+    \item For real-world projects, it would be useful to allow the user to annotate functions which are supposed to be obfuscated. Obfuscating only a selected subset of functions in a project would probably lead to smaller overhead from the obfuscation. 
+\end{itemize}
+
+\chapter{Testing and Evaluation}
+In this chapter, we are to evaluate the obfuscation techniques based on the criteria and metrics described in Section \ref{sec:eval} 
+and test the obfuscation on selected samples of code. The test programs consist of a C++ implementation of SHA-256 hash function\footnote{\url{https://github.com/martynafford/sha-2}}, a C++ implementation of AES-CBC\footnote{\url{https://github.com/kkAyataka/plusaes}} with 128-bit key, and an implementation of QuickSort in C\footnote{\url{https://www.programiz.com/dsa/quick-sort}}.
+
+\section{Potency}
+For testing potency, we are going to compute the software complexity metrics of the obfuscated bitcode, and compare it to the non-obfuscated version. 
+
+Except for the Bogus Control Flow pass, the transformation do not significantly change the Control Flow Graph of the program, since the passes obfuscating constants and substituting instruction operate only in the scope of individual basic blocks, while the pass obfuscating strings manipulates global variables in the bitcode. It also injects a call to decode the string, but this operation does not change the CFG in a significant way. Therefore, we are going to use instruction count ($\mu_1$) and Kolmogorov complexity ($\mu_2$) as metrics to evaluate the potency of obfuscations. 
+
+To obtain the values, we use \texttt{obfuscation-metrics} tool\footnote{\url{https://github.com/b-mueller/obfuscation-metrics}}, which includes an implementation of a simple LLVM analysis pass which parses the IR module and outputs the metrics. To compute Kolmogorov complexity, the tool uses the \texttt{llvm::zlib::compress()} function, which is included in the LLVM libraries. 
+
+\begin{table}[]
+\begin{tabularx}{\textwidth} { 
+  | m{10em} 
+  | >{\centering\arraybackslash}X 
+  | >{\centering\arraybackslash}X 
+  | >{\centering\arraybackslash}X 
+  | >{\centering\arraybackslash}X 
+  | >{\centering\arraybackslash}X 
+  | >{\centering\arraybackslash}X |}
+\hline
+ & \multicolumn{2}{c|}{SHA-512} & \multicolumn{2}{c|}{AES} & \multicolumn{2}{c|}{QuickSort}  
+ \\ \hline &  $\mu_1$ & $\mu_2$ & $\mu_1$ & $\mu_2$ & $\mu_1$ & $\mu_2$ \\ \hline
+Substitution        & 1.37 & 1.07 &           &  &  &  \\ \hline
+Opaque constants    & 2.66 & 1.86 & &  &  &  \\ \hline
+String obfuscation  & 1.05 & 1.04 &           &  &  &  \\ \hline
+Bogus Control Flow  & 3.52 & 2.23 &           &  &  &  \\ \hline
+                          &         &         &           &  &  &  \\ \hline
+                          &         &         &           &  &  &  \\ \hline
+                          &         &         &           &  &  &  \\ \hline
+\end{tabularx}
+\caption{Changes in software complexity metrics after applying obfuscation. Values show a ratio of obfuscated and non-obfuscated metrics of a program. $\mu_1$ is the change in number of instructions, $\mu_2$ is the change of Kolmogorov complexity.}
+\end{table}
+
+
+
+\chapter{Obfuscation of Android Native Code}
 
 \chapter{Conclusion}
 
