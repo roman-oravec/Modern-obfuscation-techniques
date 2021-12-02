@@ -644,7 +644,9 @@ If such arguments are found, they are used to create an opaque predicate. In the
 
 The implementation of the \texttt{getSymOP()} function is more complex. First, it allocates two arrays of integers on the stack and initializes their values (a range from 0 to array size minus one). Then, a remainder of a division of the input argument by the size of the first array is stored in a virtual register by creating a \texttt{srem} (signed remainder) instruction. This register is then used as the second index in a \texttt{getelementptr}\footnote{\url{https://llvm.org/docs/GetElementPtr.html}} instruction, indexing the first array. An element pointed to by the result of this \texttt{getelementptr} instruction is then stored into a new virtual register, which is used as an index for a second \texttt{getelementptr} instruction, indexing the second array. 
 
-At this point, our implementation is a bit different from the design proposed in \cite{bi_opaque}. Since the values in the arrays correspond to the indices they are stored at, the elements obtained from both arrays are always equal. This allows us to construct an invariant opaque predicate by creating an \texttt{icmp} (integer comparison) instruction with the two elements as its operands, while the result of this comparison is always true. We suppose that this simplified implementation, however, does not weaken the resilience of the opaque predicates against symbolic execution, since we are still using the symbolic variable (input argument) to calculate the indices of the arrays.
+%At this point, our implementation is a bit different from the design proposed in \cite{bi_opaque}. Since the values in the arrays correspond to the indices they are stored at, the elements obtained from both arrays are always equal. This allows us to construct an invariant opaque predicate by creating an \texttt{icmp} (integer comparison) instruction with the two elements as its operands, while the result of this comparison is always true. We suppose that this simplified implementation, however, does not weaken the resilience of the opaque predicates against symbolic execution, since we are still using the symbolic variable (input argument) to calculate the indices of the arrays.
+
+Loading an element from the second array like this allows us to construct an invariant opaque predicate by creating an \texttt{icmp} (integer comparison) instruction with the two operands, one being the loaded element, the other one is the size of the arrays. Since the values stored in the arrays are not larger than the size of the arrays, this comparison has an invariant result and can be used as an opaque predicate. 
 
 Listing \ref{lst:sym} shows a snippet of the generated IR code that performs described operations (initialization of the arrays \texttt{\%arr1} and \texttt{\%arr2} is omitted). The obfuscated function is \texttt{main()} with standard arguments \texttt{(int argc, char *argv[])}, therefore the symbolic value used in this case is \texttt{\%argc}.
 
@@ -659,7 +661,7 @@ store i32 %argc, i32* %allocaInst
 %1 = load i64, i64* %idx_1
 %idx_2 = getelementptr inbounds [8 x i64], [8 x i64]* %arr2, i32 0, i64 %1
 %2 = load i64, i64* %idx_2
-%ArrOpq = icmp eq i64 %2, %1
+%ArrOpq = icmp ne i64 %2, 8
 \end{minted}
 \caption{IR code for constructing symbolic opaque predicates.}
 \label{lst:sym}
@@ -688,12 +690,16 @@ Table \ref{tab:changes} shows how applying the obfuscating transformations influ
 
 \subsection{Potency of individual passes}
 
+\subsubsection{Instructions substitution}
 The Instructions substitution pass has been applied on the test program in two iterations. Comparing the change of the metrics in the first and the second iteration, we can see that applying the transformation multiple times does increase $\mu_1$ more than $\mu_2$. This result implies that while the size of the program grows larger with each application of this pass, some regular patterns probably start to appear in the obfuscated program.
 
+\subsubsection{Opaque constants}
 The results for the pass creating opaque constants show that it has relatively high potency. Character of the obfuscated programs might by a factor that contributes to this result. Even though we have used only one pair of functions to build the expressions for this obfuscation (as described in Section \ref{obf_const}), this pass inserts a large amount of new instructions (compared to the Instructions substitution pass), while also generating random operands for some of them, resulting in a significant increase of both metrics. 
 
+\subsubsection{String obfuscation}
 String obfuscation comes out as the least potent transformation, but this result might be caused by the low number of strings in the obfuscated programs. Slightly higher potency in the case of using the string encoding and decoding functions based on bitwise XOR is caused by these functions being more complex, compared to the ones based on rotation of bits. 
 
+\subsubsection{Bogus control flow}
 Bogus Control Flow is the most potent pass, as it not only injects new instructions, but also duplicates the basic blocks and creates randomly initiated global variables. The significant increase of $\mu_1$ is probably caused by the creation of the symbolic memory opaque predicates (Section \ref{sec:sym_mem}), as it inserts an \texttt{alloca} instruction for each element of the arrays created in this process. On the other hand, metric $\mu_2$ might be mostly influenced by creation of randomized global variables, similarly as in the case of the Opaque constants transformation. 
 
 \subsection{Combining the passes}
@@ -715,9 +721,9 @@ Table \ref{tab:changes} shows that combination of the passes results in signific
 
 Due to the randomness of the obfuscation (e.g. randomly selecting the instruction substitution, randomly generating values for opaque constants), there is a slight variance in the resulting metrics when comparing obfuscated codes originating from the same program, after applying the same transformation independently. However, the variance was only around 4\%, therefore we do not include the results of multiple independent applications of the transformations in the table.
 
-There is a noticeable pattern among all of the results in Table \ref{tab:changes}. Number of instructions ($\mu_1$) always increases more than Kolmogorov complexity ($mu_2$). This implies that the transformations have a larger influence on the size of the program, but they do not add irregularities to the program at the same rate. We suppose that this ratio can be more even, if add more diversity to the transformations, for example by implementing more substitution candidates for the instructions, creating arrays of various sizes for the symbolic memory opaque predicates, or by inserting random instructions into the cloned blocks in the Bogus Control Flow pass.
+There is a noticeable pattern among all of the results in Table \ref{tab:changes}. Number of instructions ($\mu_1$) always increases more than Kolmogorov complexity ($mu_2$). This implies that the transformations have a larger influence on the size of the program, but they do not add irregularities to the program at the same rate. We suppose that this ratio can be made more even, if we add more diversity to the transformations, for example by implementing more substitution candidates for the instructions, creating arrays of various sizes for the symbolic memory opaque predicates, or by inserting random sequences of junk instructions into the cloned blocks in the Bogus Control Flow pass.
 
-\begin{table}[!h] \label{tab:changes}
+\begin{table}[!ht] \label{tab:changes}
 \begin{tabularx}{\textwidth} { 
   | m{10em} 
   | >{\centering\arraybackslash}X 
@@ -745,6 +751,44 @@ Reverse order           & 8.10 & 4.24 & 9.50 & 7.05 & 21.57 & 7.84 \\ \hline
 \end{table}
 
 \section{Resilience}
+
+Resilience is a metric that reflects difficulty of creating and automatic deobfuscator and its time and space requirements for deobfuscating a program. Since implementing a deobfuscator is a time consuming task and the results would be vague and subjective (depending on the abilities of the reverse engineer creating the deobfuscator), we will only discuss specifics of the transformation in the context of creating a hypothetical automatic deobfuscator. 
+
+\subsection{Instructions substitution}
+
+We consider Instructions substitution pass to have a high resilience, since there are no fully automatic tools which could reliably simplify MBA expressions. This is mostly due to the fact that there is no clearly defined scale to measure what expressions are easy or hard to comprehend by humans. To implement a deobfuscator, a reverse engineer would first need to identify all of the rewriting rules used to obfuscate the binary operations, and then it might be possible to use \textit{pattern matching} to recover the original instructions. Security of MBA expressions against reverse engineering are further discussed in \cite{mba_zhou}, where the authors experimented with analytical math tools (Mathematica and Maple) in order to prove their assumption that MBA expressions can not be automatically simplified. 
+
+\subsection{Opaque constants}
+
+Opaque constants are created using the MBA expressions as well, therefore this transformation has a similar degree of resilience as Instructions substitution. However, in our implementation, we have used just a single MBA identity combined with linear functions, so this pattern might be identified easily, especially when used without any subsequent obfuscation. Resilience of this transformation could be increased by implementing more MBA identities and using a variety of linear and polynomial functions to construct the expressions. 
+
+\subsection{String obfuscation}
+String obfuscation might be easily identifiable, since the calls for decoding the strings at runtime are injected into the \texttt{main} function. Therefore we consider the resilience of this transformation to be weak. However, the resilience may also vary depending on the \texttt{decode} function used. Since the strings do not appear in the obfuscated binary, this transformation is still resilient against simple tools that perform static analysis, or automated tools running in an environment where they do not have a permission to execute binaries. 
+
+\subsection{Bogus Control Flow}
+
+In Bogus Control Flow pass, we have focused on creating resilient opaque predicates. To construct standard invariant opaque predicates, based on arithmetic and modulo operations, we use either function input values or create global variables. In case of global variables, the opaque predicate might be easily identifiable and removed during static analysis. We have also tested the resilience of the symbolic memory opaque predicates with \texttt{angr} script (Listing \ref{lst:angr}) on a simple \textit{crackme} program, which takes a string argument from the standard input, compares it with a hard-coded string and outputs the result. Surprisingly, \texttt{angr} was able to find the solution within seconds, despite the obfuscation. However, detecting opaque predicates and removing bogus basic blocks might still be a challenge for a deobfuscator based on symbolic execution, as the authors of \cite{bi_opaque} argue. Generally, we consider this transformation to be relatively weak in resilience. 
+
+\begin{listing}[!h]
+\begin{minted}{python}
+def solve(elf_binary):
+  project = angr.Project(elf_binary) 
+  arg = claripy.BVS('arg',8*4)
+  initial_state = project.factory.entry_state(args=[elf_binary,arg]) 
+  simulation = project.factory.simgr(initial_state) 
+  simulation.explore(find=is_successful)
+  if len(simulation.found) > 0:
+    print(simulation.found[0].solver.eval(arg,cast_to=bytes))
+
+def is_successful(state):
+	output = state.posix.dumps(sys.stdout.fileno())
+	if b'Correct' in output: 
+		return True
+	return False
+\end{minted}
+\label{lst:angr}
+\caption{A snippet of the \texttt{angr} script used to solve a simple \texttt{crackme}. The script has been adapted from \cite{crackme_angr}.}
+\end{listing}
 
 \section{Cost}
 
