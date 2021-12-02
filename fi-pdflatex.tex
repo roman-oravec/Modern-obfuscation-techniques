@@ -556,7 +556,7 @@ To further harden these predicates, we use input arguments of the obfuscated fun
 
 When the function does not have suitable arguments, one or two global variables (depending on the number of available integer arguments) are created and initialized to a random value. 
 
-\subsection{Symbolic memory opaque predicates}
+\subsection{Symbolic memory opaque predicates} \label{sec:sym_mem}
 This type of opaque predicate is based on the ideas first proposed by Collberg et al. \cite{manufacturing_opaque}. The exact method to construct is described in \cite{bi_opaque}. This is the technique which we have decided to implement\footnote{Although a similar implementation can be found at \url{https://github.com/hxuhack/symobfuscator}}. 
 
 The predicate is constructed by creating two arrays and using an input value of the obfuscated function. The remainder $r$ after division of the input value by the size of the first array is used as an index to get the $r$=th element from the first array. This element then serves as an index to the second array, which yields an element from the second array that can be used to construct the opaque predicate. 
@@ -684,7 +684,40 @@ Except for the Bogus Control Flow pass, the transformation do not significantly 
 
 To obtain the values, we use \texttt{obfuscation-metrics} tool\footnote{\url{https://github.com/b-mueller/obfuscation-metrics}}, which includes an implementation of a simple LLVM analysis pass which parses the IR module and outputs the metrics. To compute Kolmogorov complexity, the tool uses the \texttt{llvm::zlib::compress()} function, which is included in the LLVM libraries. 
 
-\begin{table}[]
+Table \ref{tab:changes} shows how applying the obfuscating transformations influence the complexity metrics, which allows us to estimate potency of the obfuscation. 
+
+\subsection{Potency of individual passes}
+
+The Instructions substitution pass has been applied on the test program in two iterations. Comparing the change of the metrics in the first and the second iteration, we can see that applying the transformation multiple times does increase $\mu_1$ more than $\mu_2$. This result implies that while the size of the program grows larger with each application of this pass, some regular patterns probably start to appear in the obfuscated program.
+
+The results for the pass creating opaque constants show that it has relatively high potency. Character of the obfuscated programs might by a factor that contributes to this result. Even though we have used only one pair of functions to build the expressions for this obfuscation (as described in Section \ref{obf_const}), this pass inserts a large amount of new instructions (compared to the Instructions substitution pass), while also generating random operands for some of them, resulting in a significant increase of both metrics. 
+
+String obfuscation comes out as the least potent transformation, but this result might be caused by the low number of strings in the obfuscated programs. Slightly higher potency in the case of using the string encoding and decoding functions based on bitwise XOR is caused by these functions being more complex, compared to the ones based on rotation of bits. 
+
+Bogus Control Flow is the most potent pass, as it not only injects new instructions, but also duplicates the basic blocks and creates randomly initiated global variables. The significant increase of $\mu_1$ is probably caused by the creation of the symbolic memory opaque predicates (Section \ref{sec:sym_mem}), as it inserts an \texttt{alloca} instruction for each element of the arrays created in this process. On the other hand, metric $\mu_2$ might be mostly influenced by creation of randomized global variables, similarly as in the case of the Opaque constants transformation. 
+
+\subsection{Combining the passes}
+
+After evaluating each pass individually, we have determined the following sequence in which we apply all of the passes: \\
+
+\textit{String obfuscation}\footnote{We have used the encoding and decoding functions based on bitwise XOR, since they have proved to have a higher potency.} $\rightarrow$ \textit{Bogus CF} $\rightarrow$ \textit{Opaque constants} $\rightarrow$ \textit{Substitution}. \\
+
+The reasoning behind choosing this order of the passes is following: 
+
+\begin{itemize}
+    \item The String obfuscation pass injects new functions, which are not obfuscated, therefore it is reasonable to apply this pass first, so the subsequent passes can obscure these functions.
+    \item Bogus Control Flow pass creates clones of the basic blocks, which would be easily identifiable without subsequent obfuscation. The opaque predicates are hardened and diversified by applying the substitution pass. 
+    \item Expressions for hiding the constants also benefit from being applied before the substitution pass, same as the opaque predicates.
+    \item Instructions substitution pass has basically the smallest scope -- transforming single instructions. Since it might improve the resilience and potency of all the other passes, it is applied last.
+\end{itemize}
+
+Table \ref{tab:changes} shows that combination of the passes results in significantly higher potency. We also present the values of $\mu_1$ and $\mu_2$ when the passes have been applied in a reverse order, where it is clearly visible how the particular ordering of the passes can influence the potency. In this case, the values are significantly lower than the original sequence. 
+
+Due to the randomness of the obfuscation (e.g. randomly selecting the instruction substitution, randomly generating values for opaque constants), there is a slight variance in the resulting metrics when comparing obfuscated codes originating from the same program, after applying the same transformation independently. However, the variance was only around 4\%, therefore we do not include the results of multiple independent applications of the transformations in the table.
+
+There is a noticeable pattern among all of the results in Table \ref{tab:changes}. Number of instructions ($\mu_1$) always increases more than Kolmogorov complexity ($mu_2$). This implies that the transformations have a larger influence on the size of the program, but they do not add irregularities to the program at the same rate. We suppose that this ratio can be more even, if add more diversity to the transformations, for example by implementing more substitution candidates for the instructions, creating arrays of various sizes for the symbolic memory opaque predicates, or by inserting random instructions into the cloned blocks in the Bogus Control Flow pass.
+
+\begin{table}[!h] \label{tab:changes}
 \begin{tabularx}{\textwidth} { 
   | m{10em} 
   | >{\centering\arraybackslash}X 
@@ -694,20 +727,26 @@ To obtain the values, we use \texttt{obfuscation-metrics} tool\footnote{\url{htt
   | >{\centering\arraybackslash}X 
   | >{\centering\arraybackslash}X |}
 \hline
- & \multicolumn{2}{c|}{SHA-512} & \multicolumn{2}{c|}{AES} & \multicolumn{2}{c|}{QuickSort}  
- \\ \hline &  $\mu_1$ & $\mu_2$ & $\mu_1$ & $\mu_2$ & $\mu_1$ & $\mu_2$ \\ \hline
-Substitution        & 1.37 & 1.07 &           &  &  &  \\ \hline
-Opaque constants    & 2.66 & 1.86 & &  &  &  \\ \hline
-String obfuscation  & 1.05 & 1.04 &           &  &  &  \\ \hline
-Bogus Control Flow  & 3.52 & 2.23 &           &  &  &  \\ \hline
-                          &         &         &           &  &  &  \\ \hline
-                          &         &         &           &  &  &  \\ \hline
-                          &         &         &           &  &  &  \\ \hline
+Program  & \multicolumn{2}{c|}{SHA-512} & \multicolumn{2}{c|}{AES} & \multicolumn{2}{c|}{QuickSort} \\ \hline 
+Metric & $\mu_1$ & $\mu_2$ & $\mu_1$ & $\mu_2$ & $\mu_1$ & $\mu_2$ \\ \hline \hline
+Substitution & 1.37 & 1.07 & 1.09 & 1.04 & 1.23 & 1.03 \\ \hline
+Substitution $\times2$  & 2.25 & 1.26 & 1.34 & 1.13 & 1.82 & 1.11 \\ \hline
+Opaque constants        & 2.66 & 1.86 & 3.29 & 2.40 & 3.76 & 1.96 \\ \hline
+String obfuscation 1    & 1.05 & 1.04 & 1.01 & 1.02 & 1.19 & 1.12 \\ \hline
+String obfuscation 2    & 1.09 & 1.05 & 1.02 & 1.03 & 1.35 & 1.16 \\ \hline
+Bogus Control Flow      & 3.52 & 2.23 & 4.28 & 3.49 & 7.18 & 3.40 \\ \hline
+Str 2 + Bogus           & 3.72  & 2.35 & 4.40 & 3.64 & 10.64 & 4.44 \\ \hline
+Str 2 + Bogus + Const   & 14.26 & 8.08 & 19.16 & 16.23 & 32.43 & 12.27 \\ \hline
+All                     & 26.98 & 11.03 & 36.05 & 23.12 & 57.88 & 16.23 \\ \hline
+Reverse order           & 8.10 & 4.24 & 9.50 & 7.05 & 21.57 & 7.84 \\ \hline
+%  &         &         &           &  &  &  \\ \hline
 \end{tabularx}
-\caption{Changes in software complexity metrics after applying obfuscation. Values show a ratio of obfuscated and non-obfuscated metrics of a program. $\mu_1$ is the change in number of instructions, $\mu_2$ is the change of Kolmogorov complexity.}
+\caption{Changes in software complexity metrics after applying obfuscation. Values show a ratio of metrics of an obfuscated and a non-obfuscated program. $\mu_1$ is the change in the number of instructions, $\mu_2$ is the change of Kolmogorov complexity. Substitution $\times 2$ shows the effects of applying Instruction Substitution pass twice. String obfuscation 1 and 2 refer to the two different string encoding functions -- based on bit rotation and bitwise XOR, respectively. Last three rows show the changes of the metrics after applying multiple passes sequentially. Order of the passes in the \textit{All} row is String obfuscation 2 -- Bogus Control Flow -- Opaque constants -- Instructions substitution. In the last row, the values represent the metrics after applying this sequence in a reverse order. } 
 \end{table}
 
+\section{Resilience}
 
+\section{Cost}
 
 \chapter{Obfuscation of Android Native Code}
 
