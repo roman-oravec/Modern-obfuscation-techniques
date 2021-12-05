@@ -702,7 +702,7 @@ String obfuscation comes out as the least potent transformation, but this result
 \subsubsection{Bogus control flow}
 Bogus Control Flow is the most potent pass, as it not only injects new instructions, but also duplicates the basic blocks and creates randomly initiated global variables. The significant increase of $\mu_1$ is probably caused by the creation of the symbolic memory opaque predicates (Section \ref{sec:sym_mem}), as it inserts an \texttt{alloca} instruction for each element of the arrays created in this process. On the other hand, metric $\mu_2$ might be mostly influenced by creation of randomized global variables, similarly as in the case of the Opaque constants transformation. 
 
-\subsection{Combining the passes}
+\subsection{Combining the passes} \label{sec:combine}
 
 After evaluating each pass individually, we have determined the following sequence in which we apply all of the passes: \\
 
@@ -719,11 +719,11 @@ The reasoning behind choosing this order of the passes is following:
 
 Table \ref{tab:changes} shows that combination of the passes results in significantly higher potency. We also present the values of $\mu_1$ and $\mu_2$ when the passes have been applied in a reverse order, where it is clearly visible how the particular ordering of the passes can influence the potency. In this case, the values are significantly lower than the original sequence. 
 
-Due to the randomness of the obfuscation (e.g. randomly selecting the instruction substitution, randomly generating values for opaque constants), there is a slight variance in the resulting metrics when comparing obfuscated codes originating from the same program, after applying the same transformation independently. However, the variance was only around 4\%, therefore we do not include the results of multiple independent applications of the transformations in the table.
+Due to the randomness of the obfuscation (e.g. randomly selecting the instruction substitution, randomly generating values for opaque constants), there is a slight variance in the resulting metrics when comparing obfuscated codes originating from the same program, after applying the same transformation independently. However, the variance was only around 4\%, therefore we do not include the individual results of multiple independent applications of the transformations in the table.
 
 There is a noticeable pattern among all of the results in Table \ref{tab:changes}. Number of instructions ($\mu_1$) always increases more than Kolmogorov complexity ($mu_2$). This implies that the transformations have a larger influence on the size of the program, but they do not add irregularities to the program at the same rate. We suppose that this ratio can be made more even, if we add more diversity to the transformations, for example by implementing more substitution candidates for the instructions, creating arrays of various sizes for the symbolic memory opaque predicates, or by inserting random sequences of junk instructions into the cloned blocks in the Bogus Control Flow pass.
 
-\begin{table}[!ht] \label{tab:changes}
+\begin{table}[!h] \label{tab:changes}
 \begin{tabularx}{\textwidth} { 
   | m{10em} 
   | >{\centering\arraybackslash}X 
@@ -791,6 +791,29 @@ def is_successful(state):
 \end{listing}
 
 \section{Cost}
+Program obfuscation always requires a compromise between quality, or strength of the transformations, and its impact on the program performance. In this section, we are going to use the test programs to evaluate how much our transformations impact their computation time.  by using the GNU \texttt{time}\footnote{\url{https://www.gnu.org/software/time/}} utility. Particularly, we are going to measure the total number of CPU-seconds that the process spent in user mode. 
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=\textwidth]{sha_bench.pdf}
+    \caption{Performance of a program computing the SHA-512 hash function. The passes plotted as \textit{All} and \textit{All Reverse} have been applied in the order described in Section \ref{sec:combine}.}
+    \label{fig:sha_bench}
+\end{figure}
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=\textwidth]{aes_bench.pdf}
+    \caption{Performance of a program performing AES encryption with a 128-bit key in CBC mode. The passes plotted as \textit{All} and \textit{All Reverse} have been applied in the order described in Section \ref{sec:combine}.}
+    \label{fig:aes_bench}
+\end{figure}
+
+%\subsection{SHA-512}
+
+
+
+%\subsection{AES}
+
+%\subsection{QuickSort}
 
 \chapter{Obfuscation of Android Native Code}
 
