@@ -85,6 +85,7 @@
 \usepackage{paralist} %% Compact list environments
 \usepackage{amsmath}  %% Mathematics
 \usepackage{amsthm}
+\usepackage[htt]{hyphenat}
 \usepackage{amsfonts}
 \usepackage{url}      %% Hyperlinks
 \usepackage{markdown} %% Lightweight markup
@@ -339,7 +340,7 @@ LLVM backends, which generate the machine code from the intermediate representat
 
 For the purpose of obfuscation, the focus of this thesis is the middle section of the pipeline. Even though the optimizer works only with the intermediate representation form, which is passed to the backend afterward, transformations applied in this phase have an impact on the structure of the final executable file. 
 
-\section{LLVM Intermediate Representation}
+\section{LLVM Intermediate Representation} \label{sec:ir}
 The LLVM IR is a low-level language similar to assembly. However, it provides various abstractions which remove target-specific instructions and features. It uses a set of infinite temporary registers and the \textit{Single Static Assignment} (SSA) form, which means that it needs to fulfill two constraints:
 
 \begin{enumerate}
@@ -673,6 +674,7 @@ The passes have been implemented as a proof-of-concept for demonstration and tes
     \item To make the obfuscation more user friendly, a scheduling pass can be implemented, which would run individual passes, together with LLVM optimisation passes, in a sequence specified by the user. 
     \item For deterministic results, a random number generator that could be seeded with a value provided by the user can be used instead of the current RNG. 
     \item For real-world projects, it would be useful to allow the user to annotate functions which are supposed to be obfuscated. Obfuscating only a selected subset of functions in a project would probably lead to smaller overhead from the obfuscation. 
+    \item To further improve the security of the binary against reverse engineering, redundant information, such as debugging symbols, can be removed by using the \texttt{llvm-strip}\footnote{\url{https://llvm.org/docs/CommandGuide/llvm-strip.html}} tool, or its GNU alternative. 
 \end{itemize}
 
 \chapter{Testing and Evaluation}
@@ -769,7 +771,7 @@ String obfuscation might be easily identifiable, since the calls for decoding th
 
 In Bogus Control Flow pass, we have focused on creating resilient opaque predicates. To construct standard invariant opaque predicates, based on arithmetic and modulo operations, we use either function input values or create global variables. In case of global variables, the opaque predicate might be easily identifiable and removed during static analysis. We have also tested the resilience of the symbolic memory opaque predicates with \texttt{angr} script (Listing \ref{lst:angr}) on a simple \textit{crackme} program, which takes a string argument from the standard input, compares it with a hard-coded string and outputs the result. Surprisingly, \texttt{angr} was able to find the solution within seconds, despite the obfuscation. However, detecting opaque predicates and removing bogus basic blocks might still be a challenge for a deobfuscator based on symbolic execution, as the authors of \cite{bi_opaque} argue. Generally, we consider this transformation to be relatively weak in resilience. 
 
-\begin{listing}[!h]
+\begin{listing}[!ht]
 \begin{minted}{python}
 def solve(elf_binary):
   project = angr.Project(elf_binary) 
@@ -791,20 +793,35 @@ def is_successful(state):
 \end{listing}
 
 \section{Cost}
-Program obfuscation always requires a compromise between quality, or strength of the transformations, and its impact on the program performance. In this section, we are going to use the test programs to evaluate how much our transformations impact their computation time.  by using the GNU \texttt{time}\footnote{\url{https://www.gnu.org/software/time/}} utility. Particularly, we are going to measure the total number of CPU-seconds that the process spent in user mode. 
+Program obfuscation always requires a compromise between quality, or strength of the transformations, and its impact on the program performance. In this section, we are going to use the test programs to evaluate how much our transformations impact their computation time by using the GNU \texttt{time}\footnote{\url{https://www.gnu.org/software/time/}} utility. Particularly, we are going to measure the total number of CPU-seconds that the process spent in user mode. 
+
+For SHA-512 and AES test programs, we have generated random input bytes with \texttt{openssl rand}. In each iteration, we have stored the input as a file and passed it to the test program. From figures \ref{fig:sha_bench} and \ref{fig:aes_bench}, it is visible that the computation time increases with the size of the input. The graphs also show a relation between the performance overhead and potency of the obfuscation -- applying all transformations in the order defined in Section \ref{sec:combine} resulted in slowest computation time, while obfuscating strings and substituting instructions with MBA expressions had the smallest performance impact. 
+
+While testing the QuickSort program, we have discovered that obfuscating this program with the Bogus Control Flow pass and executing it on an array containing more than 12370 elements results in a stack overflow. After applying all of the transformations, the program could not handle more than 5550 elements. For this reason, we have excluded the Bogus Control Flow pass from Figure \ref{fig:qs_bench}.
+
+We believe that this issue is caused by the creation of symbolic memory opaque predicates, which involves allocating two arrays on the stack for each predicate, combined with the recursive nature of the QuickSort algorithm. A possible fix for this issue would be to utilize the LLVM Pass Framework to detect recursive functions in a module and use this analysis to avoid inserting symbolic memory opaque predicates into such functions.
+
+An important finding from measuring the computation time is that the performance impact of all tested transformations is constant in regard to the input size. 
 
 \begin{figure}[!h]
     \centering
-    \includegraphics[width=\textwidth]{sha_bench.pdf}
+    \includegraphics[height=0.4\textheight]{sha_bench.pdf}
     \caption{Performance of a program computing the SHA-512 hash function. The passes plotted as \textit{All} and \textit{All Reverse} have been applied in the order described in Section \ref{sec:combine}.}
     \label{fig:sha_bench}
 \end{figure}
 
 \begin{figure}[!h]
     \centering
-    \includegraphics[width=\textwidth]{aes_bench.pdf}
+    \includegraphics[height=0.4\textheight]{aes_bench.pdf}
     \caption{Performance of a program performing AES encryption with a 128-bit key in CBC mode. The passes plotted as \textit{All} and \textit{All Reverse} have been applied in the order described in Section \ref{sec:combine}.}
     \label{fig:aes_bench}
+\end{figure}
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[height=0.4\textheight]{qs_bench.pdf}
+    \caption{Performance of a QuickSort algorithm. The passes plotted as \textit{All} and \textit{All Reverse} have been applied in the order described in Section \ref{sec:combine}, except for Bogus Control Flow pass, which has been omitted.}
+    \label{fig:qs_bench}
 \end{figure}
 
 %\subsection{SHA-512}
@@ -815,7 +832,40 @@ Program obfuscation always requires a compromise between quality, or strength of
 
 %\subsection{QuickSort}
 
-\chapter{Obfuscation of Android Native Code}
+\chapter{Obfuscation on Android OS}
+Android application are usually written in Java, which is not not supported by the LLVM framework. However, developers have an option to create certain parts of an application using C and C++, for example to include high-performance libraries in games and other computationally intensive applications. It also allows the developers to reuse various C and C++ libraries or to manage native activities and access physical device components, such as sensors and touch input. The native libraries can be packaged into an Android application package file (APK) using the Gradle build system. The Java code can then call functions in the native library through the Java Native Interface (JNI) framework\footnote{\url{https://developer.android.com/ndk/guides}}.
+
+Another advantage of using native libraries on Android is the possibility of using an obfuscator based on LLVM to obscure critical components of the application and make it infeasible for potential attackers to reverse engineer them. For example, Snapchat uses this approach to secure a binary that generates an \texttt{X-Snapchat-Client-Auth-Token}, which is used in the authentication process between the client and the server in each request \cite{snap_rev}. 
+
+To test whether our passes can be used for Android software, we have created an Android Virtual Device (AVD) with Android 7.1.1 (API version 25), that emulates an ARM Application Binary Interface. 
+
+For the testing purposes, we have used a modified version of the QuickSort implementation that prints the sorted array. Since Android has a Linux kernel, we can execute compiled binaries without creating a whole Android application. 
+
+Using the default LLVM tools does not produce executable files compatible with the Android system running on ARM architecture. However, the Android Native Development Kit\footnote{\url{https://developer.android.com/ndk}} (NDK) includes prebuilt versions of LLVM tools such as clang, which are needed to produce a program which can be executed in the AVD. We have used \texttt{android-ndk-r23b}, which is the latest version of Android NDK.
+
+To emit the LLVM bitcode, we have used \texttt{armv7a-linux-androideabi16-clang}, which can be found after unpacking the NDK zip at \texttt{android-ndk-r23b/toolchains/llvm/prebuilt/linux-x86\_64/bin/}. Using this version of clang, we can generate the IR module as described in Section \ref{sec:ir}. Afterwards, we use the obfuscating pass, which is loaded and applied using the \texttt{opt} tool from the LLVM framework. Lastly, we create the resulting binary by using the NDK clang again. In this step, we need to run clang with \texttt{-fPIE} and \texttt{-pie} flags, to ensure that the resulting program will be a \textit{Position-Independent Executable file} (PIE).
+
+To test the program in the Android OS environment, we pushed the binary to the AVD using \texttt{adb push}. When the executable is pushed to \texttt{/data/local/tmp}, it can be executed and we can see the output in \texttt{adb shell}. 
+
+If we are compiling multiple source files to create a single executable, we use \texttt{llvm-link}, which is also included in the NDK package. 
+
+\begin{listing}
+\begin{minted}{bash}
+clang -S -emit-llvm qs.c -o qsort_arm.ll
+clang -S -emit-llvm qs_main.c -o qs_main_arm.ll
+llvm-link qs_main_arm.ll qsort_arm.ll -o qs_arm_linked.ll
+opt -load libObfConstPass.so -obfconst -S qs_arm_linked.ll -o qs_arm_const.ll
+clang -fPIE -pie qs_arm_const.ll -o qs_link_const
+adb push qs_link_const /data/local/tmp
+adb root
+adb shell chmod +x /data/local/tmp/qs_link_const
+adb shell /data/local/tmp/qs_link_const 10
+\end{minted}
+\label{lst:arm}
+\caption{Sequence of shell commands to obfuscate the QuickSort program, compile it for ARM, and execute in the AVD.}
+\end{listing}
+
+Following the procedure described above, we have tested the obfuscating passes. All obfuscated versions of QuickSort produced a sorted array as an output. That proves that this form of obfuscation is also usable on Android devices. To use the obfuscation with bigger projects, or to produce native libraries and include them in an APK, this process can be automated by integrating it with a suitable build system. 
 
 \chapter{Conclusion}
 
