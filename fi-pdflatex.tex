@@ -60,17 +60,15 @@
     advisor     = {Mgr. et Mgr. Jan Krhovják, Ph.D.},
     title       = {Modern obfuscation techniques},
     TeXtitle    = {Modern obfuscation techniques},
-    keywords    = {keyword1, keyword2, ...},
-    TeXkeywords = {keyword1, keyword2, \ldots},
+    keywords    = {obfuscation, LLVM, compilers, security, Android, C++},
+    TeXkeywords = {obfuscation, LLVM, compilers, security, Android, C++},
     abstract    = {%
-      This is the abstract of my thesis, which can
-
-      span multiple paragraphs.
+      In the context of cybersecurity, obfuscation is a method of manipulating a computer program with the intention to obscure its inner workings. Various obfuscation techniques have found their use as a means to protect intellectual property and to prevent code tampering, as well as to achieve malicious purposes, such as creating malware that can circumvent detection mechanisms. In this thesis, we examine multiple commonly used obfuscating techniques and freely available tools that implement them. We also discuss the possibilities of the LLVM Pass Framework for obfuscating programs during compilation. In the practical part, we have implemented several obfuscating transformations, leveraging the LLVM Pass Framework. The quality of the implemented transformations has been tested and evaluated with respect to selected metrics. Lastly, we have examined and tested the possibility of using our implementation to obfuscate programs written in C/C++ for Android OS. 
     },
     thanks      = {%
-      These are the acknowledgements for my thesis, which can
-
-      span multiple paragraphs.
+    I want to thank my advisor, Mgr. et Mgr. Jan Krhovják, Ph.D., for giving
+    me the freedom in exploring a field I am interested in, as well as his guidance and advice. I would also like to express my gratitude to my close ones for supporting
+    me throughout the process of writing this thesis.
     },
     bib         = example.bib,
     %% Uncomment the following line (by removing the %% at the
@@ -391,29 +389,44 @@ The open-source version of the project implements three obfuscating transformati
 \begin{enumerate}
     \item \textit{Instructions Substitution} is the most simple obfuscating transformation included in the project. It replaces simple binary operations with more complex ones, as described in Section \ref{substitution}. Obfuscator-LLVM supports substitution of integer additions and subtractions and the Boolean operators  AND  ($\&$),  OR  ($|$)  and  XOR  (ˆ). For example, the expression $a = b \wedge c$ is substituted as $a = (b \oplus \neg c) \wedge b$. Some of the operations have multiple substitution candidates, which are chosen randomly to increase code diversity. A full list of the implemented substitutions can be found in \cite{obfuscator-llvm}. The substitutions are rather simple and according to the authors, this transformation  can easily  be  circumvented  by  re-optimizing  the  generated  code.
     \item \textit{Bogus Control Flow} modifies the control flow graph by inserting a new basic block before an existing one. The new basic block ends with an opaque predicate (\ref{opaque}), which always evaluates to \texttt{True}, making a conditional jump to the original basic block. The original basic block is also cloned, randomly filled up with various junk instructions, and inserted to the \texttt{False} branch leading from the new basic block. This cloned block is never reached, because of the invariant opaque predicate. The weakness in the implementation of this transformation is that it uses just a single opaque predicate: $$(y < 10\, ||\, x \cdot (x - 1) \mod 2 == 0)$$ The two global variables, $x$ and $y$, which are declared to construct this predicate, can also give a hint on where the opaque predicates are, which would make it easier for a reverse engineer to overcome this transformation. 
-    \item \textit{Control Flow Flattening} is implemented in a naive way, as described in Section \ref{flatten} -- by hardcoding the routing values during the obfuscation process. This implementation provides some resilience against automated analysis tools, e.g. signature-based malware scanners, but it does not propose a significant challenge for a reverse engineer or automated tools performing a more complex static analysis.
+    \item \textit{Control Flow Flattening} is implemented in a naive way, as described in Section \ref{flatten} -- by hard-coding the routing values during the obfuscation process. This implementation provides some resilience against automated analysis tools, e.g. signature-based malware scanners, but it does not propose a significant challenge for a reverse engineer or automated tools performing a more complex static analysis.
 \end{enumerate}
 
 Apart from the aforementioned obfuscating transformations, Obfuscator-LLVM also implements a transformation pass for basic block splitting. This pass introduces additional complexity to the transformations manipulating the control flow. 
 
-The authors also added a feature to tag specific functions, which are supposed to be obfuscated, in the source code of the program. This way, the developers can reduce the negative performance impacts on the program they are obfuscating, by ommiting non-crucial functions from the obfuscation process. 
+The authors also added a feature to tag specific functions, which are supposed to be obfuscated, in the source code of the program. This way, the developers can reduce the negative performance impacts on the program they are obfuscating, by omitting non-crucial functions from the obfuscation process. 
 
-Commercial version of Obfuscator-LLVM used to implement additional, more advanced capabilities, such as code tamper-proofing and procedures merging, mentioned in \cite{obfuscator-llvm}. However, according to the wiki on the project github repository\footnote{\url{https://github.com/obfuscator-llvm/obfuscator/wiki}}, the commercial version is no longer available since the end of 2016. 
+Commercial version of Obfuscator-LLVM used to implement additional, more advanced capabilities, such as code tamper-proofing and procedures merging, mentioned in \cite{obfuscator-llvm}. However, according to the wiki on the project GitHub repository\footnote{\url{https://github.com/obfuscator-llvm/obfuscator/wiki}}, the commercial version is no longer available since the end of 2016. 
 
-The github repository, containing the open-source version, is not being maintained since then as well. The authors of the project apparently founded a startup named Strong.Codes, which has been later acquired by Snap Inc.\footnote{\url{https://www.venturekick.ch/strongcodes}}.
+The GitHub repository, containing the open-source version, is not being maintained since then as well. The authors of the project apparently founded a startup named Strong.Codes, which has been later acquired by Snap Inc. \cite{strong_codes}.
 
 \section{Tigress}
 
 Tigress is a source-to-source obfuscator for C language, developed by Collberg\footnote{The co-author of \cite{taxonomy_obf}, \cite{manufacturing_opaque} and others} as a research project at the University of Arizona. Compared to Obfuscator-LLVM, while supporting only C language, Tigress seems to be a much more powerful obfuscation tool with a wide variety of implemented transformations, such as:
 \begin{enumerate}
-    \item \textit{Virtualization} turns a function into an interpreter with a custom set of virtual instructions for each function\footnote{\url{https://tigress.wtf/virtualize.html}}.
     \item \textit{Jitting (just-in-time compilation)} Turns the function to be obfuscated into a new one, which generates the machine code of the original function dynamically when it is executed. Another similar transformation supported by Tigress is \textit{JitDynamic}, which continuously modifies and updates the generated code at runtime. This version works at the granularity of basic blocks, decoding them when they need to be executed and subsequently re-encoding them.
-    \item \textit{Flattening} implements a sligltly more advanced approach to flatten the control flow graph than the transformation implemented in Obfuscator-LLVM. Four kinds of block dispatchers are available -- basic implementation using \texttt{switch} statement, direct \texttt{goto} statements and indirect ones using a jump table, and \textit{call dispatch}, which creates a new function out of every basic block and uses a table of function pointers to jump to them. Obfuscation of the routing variable, which points to the next basic block to be executed, can be also enhanced by using opaque predicates (\ref{opaque}).
     
-    %TODO
+    \item \textit{Virtualization} turns a function into an interpreter with a custom set of virtual instructions for each function\footnote{\url{https://tigress.wtf/virtualize.html}}. From the randomly generated instruction set, Tigress generates a bytecode program (array) that is specialized for the obfuscated function. Tigress then selects one of eight dispatch functions (e.g. a switch statement, nested conditional statements, jump statements etc.) and produces an output program. This transformation can be further enhanced by using opaque predicates, inserting bogus code, encoding constant values, and dynamically encoding the array containing the program bytecode, using the same mechanism as \textit{JitDynamic}. 
+    
+    \item \textit{Flattening} implements a slightly more advanced approach to flatten the control flow graph than the transformation implemented in Obfuscator-LLVM. Four kinds of block dispatchers are available -- basic implementation using \texttt{switch} statement, direct \texttt{goto} statements and indirect ones using a jump table, and \textit{call dispatch}, which creates a new function out of every basic block and uses a table of function pointers to jump to them. Obfuscation of the routing variable, which points to the next basic block to be executed, can be also enhanced by using opaque predicates (\ref{opaque}).
 \end{enumerate}
+Furthermore, Tigress also provides transformations like splitting and merging functions, encoding literals, data, arithmetic operations, external calls, and branch targets. To harden the program against static analysis tools based on alias analysis, it replaces direct function calls with indirect ones, storing function addresses in a global array. 
+
+Tigress also contains a transformation to prevent taint analysis. To hide a variable from tainting, it inserts a block of code which copies its value in a loop, bit by bit, to a new one. This way, the original tainted variable may be discarded. Currently, this transformation can be applied only on a small set of variables, such as \texttt{argc} and \texttt{argv} in \texttt{main}.
 
 \section{UPX (Ultimate Packer for eXecutables)}
+UPX is an open-source software used for packing binary executable files. It is not primarily developed to be used for obfuscation. It creates an executable which is composed of three parts:
+\begin{enumerate}
+    \item Compressed executable,
+    \item Empty section, in which the executable is unpacked during runtime. It has the same size as the original unpacked executable.
+    \item Stub, which is an entry point of the packed executable. It allocates memory for unpacking the executable during runtime, extracts the original file, resolves imports, restores file permissions and jumps to the entry point of the original file.
+\end{enumerate}
+
+Thanks to its portability and support of a wide variety of executable formats, UPX is popular among the malware authors. Since the compression dramatically changes the file signature, packing a malicious executable can be used to fool many automated tools for malware analysis. 
+
+However, because of the popularity of UPX in the malware community, executables packed with this software might get automatically flagged as suspicious by antivirus scanners (e.g. by looking for specific section names -- UPX0, UPX1). The original program can be also easily unpacked with \texttt{upx -d}. One of the simple tricks used by malware authors is to modify the packed file in a way that breaks the unpacking method. For example, by modifying the section header names, the automatic unpacking method will fail, but the stub will still be able to unpack and execute the original binary \cite{simple_upx}.
+
+Since UPX is open-source, malware authors can always modify the original source code to create a custom version of UPX. It is still possible to obtain the original executable packed by a custom UPX, since it needs to be unpacked at some point during execution. To obfuscate malware, UPX is typically used as one of multiple layers of obfuscation, together with various techniques to prevent debugging and tampering the code. 
 
 \chapter{Design}
 
@@ -570,7 +583,7 @@ One way of integrating new passes using the LLVM framework is to include them in
 To make the transformations more diverse, the passes use a random number generator based on the 64-bit Mersenne Twister by Matsumoto and Nishimura (\texttt{std::mt19937}), together with the \texttt{std::random\_device} interface to generate non-deterministic random numbers.
 %TODO: general impl details
 \section{Instructions substitution}
-Implementation of this pass is based on a tutorial\footnote{\url{https://github.com/quarkslab/llvm-dev-meeting-tutorial-2015}} published by developers from Quarkslab, which shows how to write a simple obfuscating transformation which substitutes addition operation with an MBA expression. 
+Implementation of this pass is based on a tutorial\cite{Guelton2015}, created by developers from Quarkslab, which shows how to write a simple obfuscating transformation which substitutes addition operation with an MBA expression. 
 The pass iterates over instructions in a basic block, searching for instructions of \texttt{BinaryOperator} type that operate with integers. To build a new instruction, the \texttt{llvm::IRBuilder} class is used. 
 
 For each substituted instruction, the pass generates a random number from a uniform integer distribution in range from 1 to 3 (number of available substitutions) using the random number generator described in the beginning of this chapter. After the new instructions are generated and their result is stored in a new virtual register, we call the \texttt{llvm::ReplaceInstWithValue()} function, which replaces all uses of the original instruction in the basic block, and removes the original instruction. 
@@ -613,20 +626,20 @@ x - y \rightarrow \neg ( \neg x + y) \wedge \neg(\neg x + y)$}
 \end{listing}
 
 \section{Opaque constants}
-Boilerplate code for this pass is from Quarkslab developers blog\footnote{\url{https://blog.quarkslab.com/turning-regular-code-into-atrocities-with-llvm.html}}. However, the core principles and scope of obfuscation are fundamentally different. As described in Section \ref{obf_const}, this pass obfuscates unsigned 32-bit integer values. 
+Boilerplate code for this pass is from Quarkslab developers blog \cite{atrocities}. However, the core principles and scope of obfuscation are fundamentally different. As described in Section \ref{obf_const}, this pass obfuscates unsigned 32-bit integer values. 
 
 The main loop iterates over instructions of a basic block, ignoring those which are either a call to a function, switch, or a GEP\footnote{Get Element Pointer -- used to get the address of a subelement of an aggregate data structure.} instruction. When a suitable instruction is found, the pass checks whether some of its operands are constant 32-bit positive integers. Afterwards, the program proceeds to build an expression described in Section \ref{obf_const}. To find the modular inverse of $a$, \texttt{boost::integer::mod\_inverse()} function from the Boost\footnote{\url{https://www.boost.org/}} library is being used. Some of the values, most importantly, the multiplication of the obfuscated constant by the coefficient $a$ in function $f$, are computed during compilation time. Other parts, such as the expression $E$ and composition of functions $f$ and $g$, are created using the \texttt{llvm::IRBuilder}, which is instantiated with the first template argument being \texttt{NoFolder}. This template argument specifies a class used for constants. The default option -- \texttt{ConstantFolder} -- performs constant folding during compilation time, which could possibly weaken this obfuscating transformation, therefore \texttt{NoFolder} is used. 
 
 
 
 \section{String obfuscation}
-Implementation of this pass is partly based on a tutorial\footnote{\url{https://github.com/tsarpaul/llvm-string-obfuscator}} for building an LLVM pass for string obfuscation. The pass iterates over global variables in the IR file, since all strings in LLVM IR are stored as global variables. When a global variable that contains a string is encountered, it is encoded, so it does not appear in its original form in the resulting binary. 
+Implementation of this pass is partly based on a tutorial \cite{blog_strobf} for building an LLVM pass for string obfuscation. The pass iterates over global variables in the IR file, since all strings in LLVM IR are stored as global variables. When a global variable that contains a string is encountered, it is encoded, so it does not appear in its original form in the resulting binary. 
 
 Both encoding and decoding functions have to be provided in a separate LLVM IR module, named \texttt{codec.bc}. They have to be named \texttt{encode} and \texttt{decode} and their arguments need to be of type \texttt{unsigned char *}. 
 
 For each encoded string, a call to a decoding function is created and inserted into the IR file. More specifically, a \texttt{decode\_stub()} function, which contains a call to a decoding function for every string, is injected at the beginning of the \texttt{main()} function in the obfuscated program. This approach has some disadvantages. At some point during the execution of the program, all of the strings will appear decoded. However, this transformation is still useful to hinder static analysis, as well as dynamic analysis, especially when the decoding function is obfuscated with other transformations. The second disadvantage is that the obfuscated program needs to have a \texttt{main()} function, otherwise the \texttt{decode\_stub()} function can not be injected. This second issue could possibly be solved by searching for other entry points of a program, apart from \texttt{main()}.
 
-The main advantage of this pass is that the user can define arbitrary encoding and decoding functions (but also needs to ensure they are working correctly\footnote{Especially when obfuscating a program written in a language with different terminating characters than \texttt{'\textbackslash0}'.}). Both functions are first loaded from a separate LLVM module (*.bc file) using the \texttt{llvm::ParseIRFile()} function. Then, the functions can be stored in an object of \texttt{llvm::Function} type. While the \texttt{decode()} function is simply injected into the IR module, the \texttt{encode()} function is directly executed during the obfuscation, by utilizing the \texttt{llvm::ExecutionEngine} abstract interface.
+The main advantage of this pass is that the user can define arbitrary encoding and decoding functions (but also needs to ensure they are working correctly\footnote{Especially when obfuscating a program written in a language with different terminating characters than \texttt{'\textbackslash0}'.}). Both functions are first loaded from a separate LLVM module (bitcode file) using the \texttt{llvm::ParseIRFile()} function. Then, the functions can be stored in an object of \texttt{llvm::Function} type. While the \texttt{decode()} function is simply injected into the IR module, the \texttt{encode()} function is directly executed during the obfuscation, by utilizing the \texttt{llvm::ExecutionEngine} abstract interface.
 
 To harden this obfuscation pass, we tell the compiler to always inline the decode function, by adding the \texttt{llvm::Attribute::AlwaysInline} attribute to it in the pass. This measure does not appear explicitly in the bitcode, since the inlining will be performed by the backend and the result is observable in the compiled program. 
 
@@ -801,36 +814,30 @@ While testing the QuickSort program, we have discovered that obfuscating this pr
 
 We believe that this issue is caused by the creation of symbolic memory opaque predicates, which involves allocating two arrays on the stack for each predicate, combined with the recursive nature of the QuickSort algorithm. A possible fix for this issue would be to utilize the LLVM Pass Framework to detect recursive functions in a module and use this analysis to avoid inserting symbolic memory opaque predicates into such functions.
 
-An important finding from measuring the computation time is that the performance impact of all tested transformations is constant in regard to the input size. 
+We have also noticed that without the Bogus Control Flow pass, applying the passes in the order \textit{String obfuscation} -- \textit{Opaque constants} -- \textit{Instructions substitution} resulted in better performance of the obfuscated program, than when this order has been reversed. We have tested the same combinations of passes (omitting the Bogus Control Flow pass) and the were similar -- worse performance in case of the reverse order. However, the metrics $\mu_1$ and $\mu_2$ have been slightly higher (~15\%) for the programs obfuscated with the original sequence of transformations. This leads us to a conclusion that cost of a transformation does not always grow proportionally with its potency.
+
+Another important finding from measuring the computation time is that the performance impact of all tested transformations is \textit{constant} in regard to the input size, which can be seen in the Figures \ref{fig:sha_bench}, \ref{fig:sha_bench} and \ref{fig:qs_bench}.
 
 \begin{figure}[!h]
     \centering
-    \includegraphics[height=0.4\textheight]{sha_bench.pdf}
+    \includegraphics[height=0.38\textheight]{sha_bench.pdf}
     \caption{Performance of a program computing the SHA-512 hash function. The passes plotted as \textit{All} and \textit{All Reverse} have been applied in the order described in Section \ref{sec:combine}.}
     \label{fig:sha_bench}
 \end{figure}
 
 \begin{figure}[!h]
     \centering
-    \includegraphics[height=0.4\textheight]{aes_bench.pdf}
+    \includegraphics[height=0.38\textheight]{aes_bench.pdf}
     \caption{Performance of a program performing AES encryption with a 128-bit key in CBC mode. The passes plotted as \textit{All} and \textit{All Reverse} have been applied in the order described in Section \ref{sec:combine}.}
     \label{fig:aes_bench}
 \end{figure}
 
 \begin{figure}[!h]
     \centering
-    \includegraphics[height=0.4\textheight]{qs_bench.pdf}
+    \includegraphics[height=0.38\textheight]{qs_bench.pdf}
     \caption{Performance of a QuickSort algorithm. The passes plotted as \textit{All} and \textit{All Reverse} have been applied in the order described in Section \ref{sec:combine}, except for Bogus Control Flow pass, which has been omitted.}
     \label{fig:qs_bench}
 \end{figure}
-
-%\subsection{SHA-512}
-
-
-
-%\subsection{AES}
-
-%\subsection{QuickSort}
 
 \chapter{Obfuscation on Android OS}
 Android application are usually written in Java, which is not not supported by the LLVM framework. However, developers have an option to create certain parts of an application using C and C++, for example to include high-performance libraries in games and other computationally intensive applications. It also allows the developers to reuse various C and C++ libraries or to manage native activities and access physical device components, such as sensors and touch input. The native libraries can be packaged into an Android application package file (APK) using the Gradle build system. The Java code can then call functions in the native library through the Java Native Interface (JNI) framework\footnote{\url{https://developer.android.com/ndk/guides}}.
@@ -841,7 +848,7 @@ To test whether our passes can be used for Android software, we have created an 
 
 For the testing purposes, we have used a modified version of the QuickSort implementation that prints the sorted array. Since Android has a Linux kernel, we can execute compiled binaries without creating a whole Android application. 
 
-Using the default LLVM tools does not produce executable files compatible with the Android system running on ARM architecture. However, the Android Native Development Kit\footnote{\url{https://developer.android.com/ndk}} (NDK) includes prebuilt versions of LLVM tools such as clang, which are needed to produce a program which can be executed in the AVD. We have used \texttt{android-ndk-r23b}, which is the latest version of Android NDK.
+Using the default LLVM tools does not produce executable files compatible with the Android system running on ARM architecture. However, the Android Native Development Kit (NDK) includes prebuilt versions of LLVM tools such as clang, which are needed to produce a program which can be executed in the AVD. We have used \texttt{android-ndk-r23b}, which is the latest version of Android NDK.
 
 To emit the LLVM bitcode, we have used \texttt{armv7a-linux-androideabi16-clang}, which can be found after unpacking the NDK zip at \texttt{android-ndk-r23b/toolchains/llvm/prebuilt/linux-x86\_64/bin/}. Using this version of clang, we can generate the IR module as described in Section \ref{sec:ir}. Afterwards, we use the obfuscating pass, which is loaded and applied using the \texttt{opt} tool from the LLVM framework. Lastly, we create the resulting binary by using the NDK clang again. In this step, we need to run clang with \texttt{-fPIE} and \texttt{-pie} flags, to ensure that the resulting program will be a \textit{Position-Independent Executable file} (PIE).
 
